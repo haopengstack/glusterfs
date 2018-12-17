@@ -15,10 +15,10 @@
 
 #include <sys/types.h>
 
-#include "defaults.h"
-#include "glusterfs.h"
-#include "hashfn.h"
-#include "logging.h"
+#include <glusterfs/defaults.h>
+#include <glusterfs/glusterfs.h>
+#include <glusterfs/hashfn.h>
+#include <glusterfs/logging.h>
 #include "namespace.h"
 
 /* Return codes for common path parsing functions. */
@@ -1329,4 +1329,17 @@ struct volume_options options[] = {
         .flags = OPT_FLAG_SETTABLE | OPT_FLAG_CLIENT_OPT | OPT_FLAG_DOC,
     },
     {.key = {NULL}},
+};
+
+xlator_api_t xlator_api = {
+    .init = init,
+    .fini = fini,
+    .reconfigure = reconfigure,
+    .op_version = {GD_OP_VERSION_3_12_0},
+    .dumpops = &dumpops,
+    .fops = &fops,
+    .cbks = &cbks,
+    .options = options,
+    .identifier = "namespace",
+    .category = GF_TECH_PREVIEW,
 };

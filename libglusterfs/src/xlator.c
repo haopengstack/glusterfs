@@ -8,12 +8,12 @@
   cases as published by the Free Software Foundation.
 */
 
-#include "xlator.h"
+#include "glusterfs/xlator.h"
 #include <dlfcn.h>
 #include <netdb.h>
 #include <fnmatch.h>
-#include "defaults.h"
-#include "libglusterfs-messages.h"
+#include "glusterfs/defaults.h"
+#include "glusterfs/libglusterfs-messages.h"
 
 #define SET_DEFAULT_FOP(fn)                                                    \
     do {                                                                       \
@@ -143,6 +143,7 @@ fill_defaults(xlator_t *xl)
     SET_DEFAULT_FOP(getspec);
     SET_DEFAULT_FOP(icreate);
     SET_DEFAULT_FOP(namelink);
+    SET_DEFAULT_FOP(copy_file_range);
 
     if (!xl->cbks)
         xl->cbks = &default_cbks;
@@ -213,26 +214,16 @@ xlator_volopt_dynload(char *xlator_type, void **dl_handle,
     /* check new struct first, and then check this */
     xlapi = dlsym(handle, "xlator_api");
     if (!xlapi) {
-        gf_msg("xlator", GF_LOG_DEBUG, 0, LG_MSG_DLSYM_ERROR,
-               "dlsym(xlator_api) on %s. "
-               "Fall back to old symbols",
-               dlerror());
-        /* This case is not an error for now, so allow it
-           to fall back to old methods. */
-        opt_list->given_opt = dlsym(handle, "options");
-        if (!opt_list->given_opt) {
-            dlerror();
-            gf_msg("xlator", GF_LOG_ERROR, 0, LG_MSG_LOAD_FAILED,
-                   "Failed to load xlator opt table");
-            goto out;
-        }
-    } else {
-        opt_list->given_opt = xlapi->options;
-        if (!opt_list->given_opt) {
-            gf_msg("xlator", GF_LOG_ERROR, 0, LG_MSG_LOAD_FAILED,
-                   "Failed to load xlator options table");
-            goto out;
-        }
+        gf_msg("xlator", GF_LOG_ERROR, 0, LG_MSG_DLSYM_ERROR,
+               "dlsym(xlator_api) missing: %s", dlerror());
+        goto out;
+    }
+
+    opt_list->given_opt = xlapi->options;
+    if (!opt_list->given_opt) {
+        gf_msg("xlator", GF_LOG_ERROR, 0, LG_MSG_LOAD_FAILED,
+               "Failed to load xlator options table");
+        goto out;
     }
 
     *dl_handle = handle;
@@ -248,110 +239,8 @@ out:
     return ret;
 }
 
-int
-xlator_dynload_oldway(xlator_t *xl)
-{
-    int i = 0;
-    int ret = -1;
-    void *handle = NULL;
-    volume_opt_list_t *vol_opt = NULL;
-    class_methods_t *vtbl = NULL;
-
-    handle = xl->dlhandle;
-
-    xl->fops = dlsym(handle, "fops");
-    if (!xl->fops) {
-        gf_msg("xlator", GF_LOG_WARNING, 0, LG_MSG_DLSYM_ERROR,
-               "dlsym(fops) on %s", dlerror());
-        goto out;
-    }
-
-    xl->cbks = dlsym(handle, "cbks");
-    if (!xl->cbks) {
-        gf_msg("xlator", GF_LOG_WARNING, 0, LG_MSG_DLSYM_ERROR,
-               "dlsym(cbks) on %s", dlerror());
-        goto out;
-    }
-
-    /*
-     * If class_methods exists, its contents override any definitions of
-     * init or fini for that translator.  Otherwise, we fall back to the
-     * older method of looking for init and fini directly.
-     */
-    vtbl = dlsym(handle, "class_methods");
-    if (vtbl) {
-        xl->init = vtbl->init;
-        xl->fini = vtbl->fini;
-        xl->reconfigure = vtbl->reconfigure;
-        xl->notify = vtbl->notify;
-    } else {
-        if (!(*VOID(&xl->init) = dlsym(handle, "init"))) {
-            gf_msg("xlator", GF_LOG_WARNING, 0, LG_MSG_DLSYM_ERROR,
-                   "dlsym(init) on %s", dlerror());
-            goto out;
-        }
-
-        if (!(*VOID(&(xl->fini)) = dlsym(handle, "fini"))) {
-            gf_msg("xlator", GF_LOG_WARNING, 0, LG_MSG_DLSYM_ERROR,
-                   "dlsym(fini) on %s", dlerror());
-            goto out;
-        }
-        if (!(*VOID(&(xl->reconfigure)) = dlsym(handle, "reconfigure"))) {
-            gf_msg_trace("xlator", 0,
-                         "dlsym(reconfigure) on %s "
-                         "-- neglecting",
-                         dlerror());
-        }
-        if (!(*VOID(&(xl->notify)) = dlsym(handle, "notify"))) {
-            gf_msg_trace("xlator", 0,
-                         "dlsym(notify) on %s -- "
-                         "neglecting",
-                         dlerror());
-        }
-    }
-
-    if (!(xl->dumpops = dlsym(handle, "dumpops"))) {
-        gf_msg_trace("xlator", 0,
-                     "dlsym(dumpops) on %s -- "
-                     "neglecting",
-                     dlerror());
-    }
-
-    if (!(*VOID(&(xl->mem_acct_init)) = dlsym(handle, "mem_acct_init"))) {
-        gf_msg_trace(xl->name, 0,
-                     "dlsym(mem_acct_init) on %s -- "
-                     "neglecting",
-                     dlerror());
-    }
-
-    vol_opt = GF_CALLOC(1, sizeof(volume_opt_list_t),
-                        gf_common_mt_volume_opt_list_t);
-
-    if (!vol_opt) {
-        goto out;
-    }
-
-    INIT_LIST_HEAD(&vol_opt->list);
-    vol_opt->given_opt = dlsym(handle, "options");
-    if (!vol_opt->given_opt) {
-        vol_opt->given_opt = default_options;
-    }
-    list_add_tail(&vol_opt->list, &xl->volume_options);
-
-    /* make sure 'min' is set to high value, so it would be
-       properly set later */
-    for (i = 0; i < GF_FOP_MAXVALUE; i++) {
-        xl->stats.interval.latencies[i].min = 0xffffffff;
-    }
-
-    ret = 0;
-
-out:
-    return ret;
-}
-
-int
-xlator_dynload_newway(xlator_t *xl)
+static int
+xlator_dynload_apis(xlator_t *xl)
 {
     int ret = -1;
     void *handle = NULL;
@@ -362,13 +251,9 @@ xlator_dynload_newway(xlator_t *xl)
 
     xlapi = dlsym(handle, "xlator_api");
     if (!xlapi) {
-        gf_msg("xlator", GF_LOG_INFO, 0, LG_MSG_DLSYM_ERROR,
-               "dlsym(xlator_api) on %s. "
-               "Fall back to old symbols",
-               dlerror());
-        /* This case is not an error for now, so allow it
-           to fall back to old methods. */
-        ret = 1;
+        gf_msg("xlator", GF_LOG_ERROR, 0, LG_MSG_DLSYM_ERROR,
+               "dlsym(xlator_api) missing: %s", dlerror());
+        ret = -1;
         goto out;
     }
 
@@ -491,15 +376,9 @@ xlator_dynload(xlator_t *xl)
     }
     xl->dlhandle = handle;
 
-    ret = xlator_dynload_newway(xl);
+    ret = xlator_dynload_apis(xl);
     if (-1 == ret)
         goto out;
-    if (1 == ret) {
-        /* it means we don't find the new symbol in xlator code */
-        ret = xlator_dynload_oldway(xl);
-        if (-1 == ret)
-            goto out;
-    }
 
     fill_defaults(xl);
 
@@ -1035,7 +914,7 @@ xlator_mem_free(xlator_t *xl)
 static void
 xlator_call_fini(xlator_t *this)
 {
-    if (!this || this->cleanup_starting)
+    if (!this || this->call_cleanup)
         return;
     this->cleanup_starting = 1;
     this->call_cleanup = 1;
@@ -1554,4 +1433,35 @@ glusterfs_delete_volfile_checksum(glusterfs_ctx_t *ctx, const char *volfile_id)
     }
 
     return 0;
+}
+
+/*
+   The function is required to take dict ref for every xlator at graph.
+   At the time of compare graph topology create a graph and populate
+   key values in the dictionary, after finished graph comparison we do destroy
+   the new graph.At the time of construct graph we don't take any reference
+   so to avoid dict leak at the of destroying graph due to ref counter underflow
+   we need to call dict_ref here.
+
+*/
+
+void
+gluster_graph_take_reference(xlator_t *tree)
+{
+    xlator_t *trav = tree;
+    xlator_t *prev = tree;
+
+    if (!tree) {
+        gf_msg("parser", GF_LOG_ERROR, 0, LG_MSG_TREE_NOT_FOUND,
+               "Translator tree not found");
+        return;
+    }
+
+    while (prev) {
+        trav = prev->next;
+        if (prev->options)
+            dict_ref(prev->options);
+        prev = trav;
+    }
+    return;
 }

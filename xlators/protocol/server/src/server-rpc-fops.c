@@ -15,13 +15,13 @@
 #include "rpc-common-xdr.h"
 #include "glusterfs3-xdr.h"
 #include "glusterfs3.h"
-#include "compat-errno.h"
+#include <glusterfs/compat-errno.h>
 #include "server-messages.h"
-#include "defaults.h"
-#include "default-args.h"
+#include <glusterfs/defaults.h>
+#include <glusterfs/default-args.h>
 #include "server-common.h"
-#include "xlator.h"
-#include "compound-fop-utils.h"
+#include <glusterfs/xlator.h>
+#include <glusterfs/compound-fop-utils.h>
 
 #include "xdr-nfs3.h"
 
@@ -4185,7 +4185,7 @@ server3_3_writev_vecsizer(int state, ssize_t *readsize, char *base_addr,
 
             /* need to round off to proper roof (%4), as XDR packing pads
                the end of opaque object with '0' */
-            size = roof(write_req.xdata.xdata_len, 4);
+            size = gf_roof(write_req.xdata.xdata_len, 4);
 
             *readsize = size;
 

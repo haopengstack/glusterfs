@@ -15,22 +15,22 @@
 #include <stdlib.h>
 #include <signal.h>
 
-#include "glusterfs.h"
+#include <glusterfs/glusterfs.h>
 #include "afr.h"
-#include "dict.h"
-#include "xlator.h"
-#include "hashfn.h"
-#include "logging.h"
-#include "list.h"
-#include "call-stub.h"
-#include "defaults.h"
-#include "common-utils.h"
-#include "compat-errno.h"
-#include "compat.h"
-#include "byte-order.h"
-#include "statedump.h"
-#include "events.h"
-#include "upcall-utils.h"
+#include <glusterfs/dict.h>
+#include <glusterfs/xlator.h>
+#include <glusterfs/hashfn.h>
+#include <glusterfs/logging.h>
+#include <glusterfs/list.h>
+#include <glusterfs/call-stub.h>
+#include <glusterfs/defaults.h>
+#include <glusterfs/common-utils.h>
+#include <glusterfs/compat-errno.h>
+#include <glusterfs/compat.h>
+#include <glusterfs/byte-order.h>
+#include <glusterfs/statedump.h>
+#include <glusterfs/events.h>
+#include <glusterfs/upcall-utils.h>
 
 #include "afr-inode-read.h"
 #include "afr-inode-write.h"
@@ -3209,8 +3209,6 @@ afr_discover(call_frame_t *frame, xlator_t *this, loc_t *loc, dict_t *xattr_req)
     }
 
     if (__is_root_gfid(loc->inode->gfid)) {
-        if (!this->itable)
-            this->itable = loc->inode->table;
         if (!priv->root_inode)
             priv->root_inode = inode_ref(loc->inode);
 
@@ -6143,13 +6141,22 @@ afr_set_heal_info(char *status)
         goto out;
     }
 
-    ret = dict_set_str(dict, "heal-info", status);
+    ret = dict_set_dynstr(dict, "heal-info", status);
     if (ret)
         gf_msg("", GF_LOG_WARNING, -ret, AFR_MSG_DICT_SET_FAILED,
                "Failed to set heal-info key to "
                "%s",
                status);
 out:
+    /* Any error other than EINVAL, dict_set_dynstr frees status */
+    if (ret == -ENOMEM || ret == -EINVAL) {
+        GF_FREE(status);
+    }
+
+    if (ret && dict) {
+        dict_unref(dict);
+        dict = NULL;
+    }
     return dict;
 }
 
@@ -6162,7 +6169,7 @@ afr_get_heal_info(call_frame_t *frame, xlator_t *this, loc_t *loc)
     unsigned char pending = 0;
     dict_t *dict = NULL;
     int ret = -1;
-    int op_errno = 0;
+    int op_errno = ENOMEM;
     inode_t *inode = NULL;
     char *substr = NULL;
     char *status = NULL;
@@ -6172,7 +6179,6 @@ afr_get_heal_info(call_frame_t *frame, xlator_t *this, loc_t *loc)
                                       &metadata_selfheal, &pending);
 
     if (ret == -ENOMEM) {
-        op_errno = -ret;
         ret = -1;
         goto out;
     }
@@ -6188,23 +6194,44 @@ afr_get_heal_info(call_frame_t *frame, xlator_t *this, loc_t *loc)
         if (ret < 0)
             goto out;
         dict = afr_set_heal_info(status);
+        if (!dict) {
+            ret = -1;
+            goto out;
+        }
     } else if (ret == -EAGAIN) {
         ret = gf_asprintf(&status, "possibly-healing%s", substr ? substr : "");
         if (ret < 0)
             goto out;
         dict = afr_set_heal_info(status);
+        if (!dict) {
+            ret = -1;
+            goto out;
+        }
     } else if (ret >= 0) {
         /* value of ret = source index
          * so ret >= 0 and at least one of the 3 booleans set to
          * true means a source is identified; heal is required.
          */
         if (!data_selfheal && !entry_selfheal && !metadata_selfheal) {
-            dict = afr_set_heal_info("no-heal");
+            status = gf_strdup("no-heal");
+            if (!status) {
+                ret = -1;
+                goto out;
+            }
+            dict = afr_set_heal_info(status);
+            if (!dict) {
+                ret = -1;
+                goto out;
+            }
         } else {
             ret = gf_asprintf(&status, "heal%s", substr ? substr : "");
             if (ret < 0)
                 goto out;
             dict = afr_set_heal_info(status);
+            if (!dict) {
+                ret = -1;
+                goto out;
+            }
         }
     } else if (ret < 0) {
         /* Apart from above checked -ve ret values, there are
@@ -6219,9 +6246,15 @@ afr_get_heal_info(call_frame_t *frame, xlator_t *this, loc_t *loc)
             if (ret < 0)
                 goto out;
             dict = afr_set_heal_info(status);
+            if (!dict) {
+                ret = -1;
+                goto out;
+            }
         }
     }
+
     ret = 0;
+    op_errno = 0;
 
 out:
     AFR_STACK_UNWIND(getxattr, frame, ret, op_errno, dict, NULL);

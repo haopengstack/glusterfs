@@ -11,32 +11,32 @@
 #include "glusterd-op-sm.h"
 #include <inttypes.h>
 
-#include "glusterfs.h"
-#include "compat.h"
-#include "dict.h"
+#include <glusterfs/glusterfs.h>
+#include <glusterfs/compat.h>
+#include <glusterfs/dict.h>
 #include "protocol-common.h"
-#include "xlator.h"
-#include "logging.h"
-#include "timer.h"
-#include "syscall.h"
-#include "defaults.h"
-#include "compat.h"
-#include "compat-errno.h"
-#include "statedump.h"
+#include <glusterfs/xlator.h>
+#include <glusterfs/logging.h>
+#include <glusterfs/timer.h>
+#include <glusterfs/syscall.h>
+#include <glusterfs/defaults.h>
+#include <glusterfs/compat.h>
+#include <glusterfs/compat-errno.h>
+#include <glusterfs/statedump.h>
 #include "glusterd-mem-types.h"
 #include "glusterd.h"
 #include "glusterd-sm.h"
 #include "glusterd-op-sm.h"
 #include "glusterd-utils.h"
 #include "glusterd-hooks.h"
-#include "store.h"
+#include <glusterfs/store.h>
 #include "glusterd-store.h"
 #include "glusterd-snapshot-utils.h"
 #include "glusterd-messages.h"
 
 #include "rpc-clnt.h"
-#include "common-utils.h"
-#include "quota-common-utils.h"
+#include <glusterfs/common-utils.h>
+#include <glusterfs/quota-common-utils.h>
 
 #include <sys/resource.h>
 #include <inttypes.h>
@@ -1768,9 +1768,16 @@ glusterd_store_volinfo(glusterd_volinfo_t *volinfo,
                        glusterd_volinfo_ver_ac_t ac)
 {
     int32_t ret = -1;
+    glusterfs_ctx_t *ctx = NULL;
+    xlator_t *this = NULL;
 
+    this = THIS;
+    GF_ASSERT(this);
+    ctx = this->ctx;
+    GF_ASSERT(ctx);
     GF_ASSERT(volinfo);
 
+    pthread_mutex_lock(&ctx->cleanup_lock);
     pthread_mutex_lock(&volinfo->store_volinfo_lock);
     {
         glusterd_perform_volinfo_version_action(volinfo, ac);
@@ -1812,6 +1819,7 @@ glusterd_store_volinfo(glusterd_volinfo_t *volinfo,
     }
 unlock:
     pthread_mutex_unlock(&volinfo->store_volinfo_lock);
+    pthread_mutex_unlock(&ctx->cleanup_lock);
     if (ret)
         glusterd_store_volume_cleanup_tmp(volinfo);
 
@@ -2079,7 +2087,7 @@ glusterd_store_global_info(xlator_t *this)
     }
 
     handle->fd = gf_store_mkstemp(handle);
-    if (handle->fd <= 0) {
+    if (handle->fd < 0) {
         ret = -1;
         goto out;
     }
@@ -2095,7 +2103,7 @@ glusterd_store_global_info(xlator_t *this)
         goto out;
     }
 
-    snprintf(op_version_str, 15, "%d", conf->op_version);
+    snprintf(op_version_str, sizeof(op_version_str), "%d", conf->op_version);
     ret = gf_store_save_value(handle->fd, GD_OP_VERSION_KEY, op_version_str);
     if (ret) {
         gf_msg(this->name, GF_LOG_ERROR, 0, GD_MSG_OP_VERS_STORE_FAIL,
@@ -2106,12 +2114,8 @@ glusterd_store_global_info(xlator_t *this)
     ret = gf_store_rename_tmppath(handle);
 out:
     if (handle) {
-        if (ret && (handle->fd > 0))
+        if (ret && (handle->fd >= 0))
             gf_store_unlink_tmppath(handle);
-
-        if (handle->fd > 0) {
-            handle->fd = 0;
-        }
     }
 
     if (uuid_str)
@@ -2122,6 +2126,128 @@ out:
                GD_MSG_GLUSTERD_GLOBAL_INFO_STORE_FAIL,
                "Failed to store glusterd global-info");
 
+    return ret;
+}
+
+int
+glusterd_store_max_op_version(xlator_t *this)
+{
+    int ret = -1;
+    glusterd_conf_t *conf = NULL;
+    char op_version_str[15] = {
+        0,
+    };
+    char path[PATH_MAX] = {
+        0,
+    };
+    gf_store_handle_t *handle = NULL;
+    int32_t len = 0;
+
+    conf = this->private;
+
+    len = snprintf(path, PATH_MAX, "%s/%s", conf->workdir,
+                   GLUSTERD_UPGRADE_FILE);
+    if ((len < 0) || (len >= PATH_MAX)) {
+        goto out;
+    }
+    ret = gf_store_handle_new(path, &handle);
+    if (ret) {
+        gf_msg(this->name, GF_LOG_ERROR, 0, GD_MSG_STORE_HANDLE_GET_FAIL,
+               "Unable to get store handle");
+        goto out;
+    }
+
+    /* These options need to be available for all users */
+    ret = sys_chmod(handle->path, 0644);
+    if (ret) {
+        gf_msg(this->name, GF_LOG_ERROR, errno, GD_MSG_FILE_OP_FAILED,
+               "chmod error for %s", GLUSTERD_UPGRADE_FILE);
+        goto out;
+    }
+
+    handle->fd = gf_store_mkstemp(handle);
+    if (handle->fd < 0) {
+        ret = -1;
+        goto out;
+    }
+
+    snprintf(op_version_str, sizeof(op_version_str), "%d", GD_OP_VERSION_MAX);
+    ret = gf_store_save_value(handle->fd, GD_MAX_OP_VERSION_KEY,
+                              op_version_str);
+    if (ret) {
+        gf_msg(this->name, GF_LOG_ERROR, 0, GD_MSG_OP_VERS_STORE_FAIL,
+               "Storing op-version failed ret = %d", ret);
+        goto out;
+    }
+
+    ret = gf_store_rename_tmppath(handle);
+out:
+    if (handle) {
+        if (ret && (handle->fd >= 0))
+            gf_store_unlink_tmppath(handle);
+    }
+
+    if (ret)
+        gf_msg(this->name, GF_LOG_ERROR, 0,
+               GD_MSG_GLUSTERD_GLOBAL_INFO_STORE_FAIL,
+               "Failed to store max op-version");
+    if (handle)
+        gf_store_handle_destroy(handle);
+    return ret;
+}
+
+int
+glusterd_retrieve_max_op_version(xlator_t *this, int *op_version)
+{
+    char *op_version_str = NULL;
+    glusterd_conf_t *priv = NULL;
+    int ret = -1;
+    int tmp_version = 0;
+    char *tmp = NULL;
+    char path[PATH_MAX] = {
+        0,
+    };
+    gf_store_handle_t *handle = NULL;
+    int32_t len = 0;
+
+    priv = this->private;
+
+    len = snprintf(path, PATH_MAX, "%s/%s", priv->workdir,
+                   GLUSTERD_UPGRADE_FILE);
+    if ((len < 0) || (len >= PATH_MAX)) {
+        goto out;
+    }
+    ret = gf_store_handle_retrieve(path, &handle);
+
+    if (ret) {
+        gf_msg_debug(this->name, 0,
+                     "Unable to get store "
+                     "handle!");
+        goto out;
+    }
+
+    ret = gf_store_retrieve_value(handle, GD_MAX_OP_VERSION_KEY,
+                                  &op_version_str);
+    if (ret) {
+        gf_msg_debug(this->name, 0, "No previous op_version present");
+        goto out;
+    }
+
+    tmp_version = strtol(op_version_str, &tmp, 10);
+    if ((tmp_version <= 0) || (tmp && strlen(tmp) > 1)) {
+        gf_msg(this->name, GF_LOG_WARNING, EINVAL, GD_MSG_UNSUPPORTED_VERSION,
+               "invalid version number");
+        goto out;
+    }
+
+    *op_version = tmp_version;
+
+    ret = 0;
+out:
+    if (op_version_str)
+        GF_FREE(op_version_str);
+    if (handle)
+        gf_store_handle_destroy(handle);
     return ret;
 }
 
@@ -4564,7 +4690,6 @@ glusterd_store_retrieve_peers(xlator_t *this)
 
         ret = gf_store_iter_get_next(iter, &key, &value, &op_errno);
         if (ret) {
-            (void)gf_store_iter_destroy(iter);
             goto next;
         }
 
@@ -4610,8 +4735,6 @@ glusterd_store_retrieve_peers(xlator_t *this)
             goto next;
         }
 
-        (void)gf_store_iter_destroy(iter);
-
         if (gf_uuid_is_null(peerinfo->uuid)) {
             gf_log("", GF_LOG_ERROR,
                    "Null UUID while attempting to read peer from '%s'",
@@ -4638,6 +4761,8 @@ glusterd_store_retrieve_peers(xlator_t *this)
         is_ok = _gf_true;
 
     next:
+        (void)gf_store_iter_destroy(iter);
+
         if (!is_ok) {
             gf_log(this->name, GF_LOG_WARNING,
                    "skipping malformed peer file %s", entry->d_name);
@@ -4650,14 +4775,14 @@ glusterd_store_retrieve_peers(xlator_t *this)
 
     args.mode = GD_MODE_ON;
 
-    rcu_read_lock();
+    RCU_READ_LOCK;
     cds_list_for_each_entry_rcu(peerinfo, &priv->peers, uuid_list)
     {
         ret = glusterd_friend_rpc_create(this, peerinfo, &args);
         if (ret)
             break;
     }
-    rcu_read_unlock();
+    RCU_READ_UNLOCK;
     peerinfo = NULL;
 
 out:

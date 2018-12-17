@@ -9,10 +9,10 @@
 */
 
 #include "barrier.h"
-#include "defaults.h"
-#include "call-stub.h"
+#include <glusterfs/defaults.h>
+#include <glusterfs/call-stub.h>
 
-#include "statedump.h"
+#include <glusterfs/statedump.h>
 
 void
 barrier_local_set_gfid(call_frame_t *frame, uuid_t gfid, xlator_t *this)
@@ -808,4 +808,19 @@ struct volume_options options[] = {
                     "operations are no longer blocked and previously "
                     "blocked acknowledgements are sent to the application"},
     {.key = {NULL}},
+};
+
+xlator_api_t xlator_api = {
+    .init = init,
+    .fini = fini,
+    .notify = notify,
+    .reconfigure = reconfigure,
+    .mem_acct_init = mem_acct_init,
+    .op_version = {1}, /* Present from the initial version */
+    .dumpops = &dumpops,
+    .fops = &fops,
+    .cbks = &cbks,
+    .options = options,
+    .identifier = "barrier",
+    .category = GF_MAINTAINED,
 };

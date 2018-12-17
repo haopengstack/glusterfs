@@ -15,14 +15,14 @@
 #include <pthread.h>
 #include <libgen.h>
 
-#include "compat-uuid.h"
+#include <glusterfs/compat-uuid.h>
 
 #include "rpc-clnt.h"
-#include "glusterfs.h"
-#include "xlator.h"
-#include "logging.h"
-#include "call-stub.h"
-#include "byte-order.h"
+#include <glusterfs/glusterfs.h>
+#include <glusterfs/xlator.h>
+#include <glusterfs/logging.h>
+#include <glusterfs/call-stub.h>
+#include <glusterfs/byte-order.h>
 #include "glusterd-mem-types.h"
 #include "rpcsvc.h"
 #include "glusterd-sm.h"
@@ -33,10 +33,10 @@
 #include "protocol-common.h"
 #include "glusterd-pmap.h"
 #include "cli1-xdr.h"
-#include "syncop.h"
-#include "store.h"
+#include <glusterfs/syncop.h>
+#include <glusterfs/store.h>
 #include "glusterd-rcu.h"
-#include "events.h"
+#include <glusterfs/events.h>
 #include "glusterd-gfproxyd-svc.h"
 
 #define GLUSTERD_TR_LOG_SIZE 50
@@ -57,6 +57,7 @@
 #define GLUSTERD_SHARED_STORAGE_KEY "cluster.enable-shared-storage"
 #define GLUSTERD_BRICK_MULTIPLEX_KEY "cluster.brick-multiplex"
 #define GLUSTERD_BRICKMUX_LIMIT_KEY "cluster.max-bricks-per-process"
+#define GLUSTERD_BRICKMUX_LIMIT_DFLT_VALUE "250"
 #define GLUSTERD_LOCALTIME_LOGGING_KEY "cluster.localtime-logging"
 #define GLUSTERD_DAEMON_LOG_LEVEL_KEY "cluster.daemon-log-level"
 
@@ -599,6 +600,9 @@ typedef enum {
 
 #define GLUSTERD_DEFAULT_PORT GF_DEFAULT_BASE_PORT
 #define GLUSTERD_INFO_FILE "glusterd.info"
+#define GLUSTERD_UPGRADE_FILE                                                  \
+    "glusterd.upgrade" /* zero byte file to detect a need for regenerating     \
+                          volfiles in container mode */
 #define GLUSTERD_VOLUME_QUOTA_CONFIG "quota.conf"
 #define GLUSTERD_VOLUME_DIR_PREFIX "vols"
 #define GLUSTERD_PEER_DIR_PREFIX "peers"
@@ -925,6 +929,20 @@ typedef ssize_t (*gd_serialize_t)(struct iovec outmsg, void *args);
         *snap_volname_ptr = '\0';                                              \
     } while (0)
 
+#define RCU_READ_LOCK                                                          \
+    pthread_mutex_lock(&(THIS->ctx)->cleanup_lock);                            \
+    {                                                                          \
+        rcu_read_lock();                                                       \
+    }                                                                          \
+    pthread_mutex_unlock(&(THIS->ctx)->cleanup_lock);
+
+#define RCU_READ_UNLOCK                                                        \
+    pthread_mutex_lock(&(THIS->ctx)->cleanup_lock);                            \
+    {                                                                          \
+        rcu_read_unlock();                                                     \
+    }                                                                          \
+    pthread_mutex_unlock(&(THIS->ctx)->cleanup_lock);
+
 #define GLUSTERD_DUMP_PEERS(head, member, xpeers)                              \
     do {                                                                       \
         glusterd_peerinfo_t *_peerinfo = NULL;                                 \
@@ -933,7 +951,7 @@ typedef ssize_t (*gd_serialize_t)(struct iovec outmsg, void *args);
                                                                                \
         key = xpeers ? "glusterd.xaction_peer" : "glusterd.peer";              \
                                                                                \
-        rcu_read_lock();                                                       \
+        RCU_READ_LOCK;                                                         \
         cds_list_for_each_entry_rcu(_peerinfo, head, member)                   \
         {                                                                      \
             glusterd_dump_peer(_peerinfo, key, index, xpeers);                 \
@@ -941,7 +959,7 @@ typedef ssize_t (*gd_serialize_t)(struct iovec outmsg, void *args);
                 glusterd_dump_peer_rpcstat(_peerinfo, key, index);             \
             index++;                                                           \
         }                                                                      \
-        rcu_read_unlock();                                                     \
+        RCU_READ_UNLOCK;                                                       \
                                                                                \
     } while (0)
 
@@ -1493,4 +1511,8 @@ glusterd_tier_prevalidate(dict_t *dict, char **op_errstr, dict_t *rsp_dict,
 
 int
 glusterd_options_init(xlator_t *this);
+
+int32_t
+glusterd_recreate_volfiles(glusterd_conf_t *conf);
+
 #endif

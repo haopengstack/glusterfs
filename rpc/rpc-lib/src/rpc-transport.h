@@ -56,17 +56,17 @@
 struct rpc_transport_ops;
 typedef struct rpc_transport rpc_transport_t;
 
-#include "dict.h"
-#include "compat.h"
+#include <glusterfs/dict.h>
+#include <glusterfs/compat.h>
 #include "rpcsvc-common.h"
 
 struct peer_info {
-    struct sockaddr_storage sockaddr;
-    socklen_t sockaddr_len;
-    char identifier[UNIX_PATH_MAX];
     // OP-VERSION of clients
     uint32_t max_op_version;
     uint32_t min_op_version;
+    struct sockaddr_storage sockaddr;
+    socklen_t sockaddr_len;
+    char identifier[UNIX_PATH_MAX];
     // Volume mounted by client
     char volname[NAME_MAX];
 };
@@ -97,6 +97,7 @@ typedef enum {
     RPC_TRANSPORT_MSG_RECEIVED,    /* Complete rpc msg has been read */
     RPC_TRANSPORT_CONNECT,         /* client is connected to server */
     RPC_TRANSPORT_MSG_SENT,
+    RPC_TRANSPORT_EVENT_THREAD_DIED /* event-thread has died */
 } rpc_transport_event_t;
 
 struct rpc_transport_msg {
@@ -120,24 +121,24 @@ struct rpc_transport_rsp {
 typedef struct rpc_transport_rsp rpc_transport_rsp_t;
 
 struct rpc_transport_req {
+    struct rpc_req *rpc_req;
     rpc_transport_msg_t msg;
     rpc_transport_rsp_t rsp;
-    struct rpc_req *rpc_req;
 };
 typedef struct rpc_transport_req rpc_transport_req_t;
 
 struct rpc_transport_reply {
-    rpc_transport_msg_t msg;
     void *private;
+    rpc_transport_msg_t msg;
 };
 typedef struct rpc_transport_reply rpc_transport_reply_t;
 
 struct rpc_transport_data {
-    char is_request;
     union {
         rpc_transport_req_t req;
         rpc_transport_reply_t reply;
     } data;
+    char is_request;
 };
 typedef struct rpc_transport_data rpc_transport_data_t;
 
@@ -145,22 +146,22 @@ typedef struct rpc_transport_data rpc_transport_data_t;
  * rpc_request, hence these should be removed from request_info
  */
 struct rpc_request_info {
-    uint32_t xid;
     int prognum;
     int progver;
     int procnum;
     void *rpc_req; /* struct rpc_req */
     rpc_transport_rsp_t rsp;
+    uint32_t xid;
 };
 typedef struct rpc_request_info rpc_request_info_t;
 
 struct rpc_transport_pollin {
-    struct iovec vector[MAX_IOVEC];
     int count;
-    char vectored;
     void *private;
     struct iobref *iobref;
+    struct iovec vector[MAX_IOVEC];
     char is_reply;
+    char vectored;
 };
 typedef struct rpc_transport_pollin rpc_transport_pollin_t;
 
@@ -181,9 +182,6 @@ struct rpc_transport {
     void *mydata;
     pthread_mutex_t lock;
     gf_atomic_t refcount;
-
-    int32_t outstanding_rpc_count;
-
     glusterfs_ctx_t *ctx;
     dict_t *options;
     char *name;
@@ -201,6 +199,7 @@ struct rpc_transport {
     uint64_t total_bytes_read;
     uint64_t total_bytes_write;
     uint32_t xid; /* RPC/XID used for callbacks */
+    int32_t outstanding_rpc_count;
 
     struct list_head list;
     int bind_insecure;
@@ -213,6 +212,8 @@ struct rpc_transport {
      * layer or in client management notification handler functions
      */
     gf_boolean_t connect_failed;
+    char notify_poller_death;
+    char poller_death_accept;
 };
 
 struct rpc_transport_ops {
@@ -307,4 +308,7 @@ rpc_transport_unix_options_build(dict_t **options, char *filepath,
 int
 rpc_transport_inet_options_build(dict_t **options, const char *hostname,
                                  int port);
+
+void
+rpc_transport_cleanup(rpc_transport_t *);
 #endif /* __RPC_TRANSPORT_H__ */

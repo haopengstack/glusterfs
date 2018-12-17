@@ -11,8 +11,8 @@
 #include <lvm2app.h>
 #endif
 
-#include "common-utils.h"
-#include "syscall.h"
+#include <glusterfs/common-utils.h>
+#include <glusterfs/syscall.h>
 #include "cli1-xdr.h"
 #include "xdr-generic.h"
 #include "glusterd.h"
@@ -22,7 +22,7 @@
 #include "glusterd-utils.h"
 #include "glusterd-volgen.h"
 #include "glusterd-messages.h"
-#include "run.h"
+#include <glusterfs/run.h>
 #include "glusterd-snapshot-utils.h"
 #include "glusterd-svc-mgmt.h"
 #include "glusterd-svc-helper.h"
@@ -113,7 +113,7 @@ glusterd_check_brick_order(dict_t *dict, char *err_str)
 
     GF_ASSERT(this);
 
-    ai_list = malloc(sizeof(addrinfo_list_t));
+    ai_list = MALLOC(sizeof(addrinfo_list_t));
     ai_list->info = NULL;
     CDS_INIT_LIST_HEAD(&ai_list->list);
 
@@ -193,7 +193,7 @@ glusterd_check_brick_order(dict_t *dict, char *err_str)
                    "host name");
             goto out;
         }
-        ai_list_tmp1 = malloc(sizeof(addrinfo_list_t));
+        ai_list_tmp1 = MALLOC(sizeof(addrinfo_list_t));
         if (ai_list_tmp1 == NULL) {
             ret = 0;
             gf_msg(this->name, GF_LOG_ERROR, ENOMEM, GD_MSG_NO_MEMORY,

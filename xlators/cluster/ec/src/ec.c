@@ -8,10 +8,10 @@
   cases as published by the Free Software Foundation.
 */
 
-#include "defaults.h"
-#include "statedump.h"
-#include "compat-errno.h"
-#include "upcall-utils.h"
+#include <glusterfs/defaults.h>
+#include <glusterfs/statedump.h>
+#include <glusterfs/compat-errno.h>
+#include <glusterfs/upcall-utils.h>
 
 #include "ec.h"
 #include "ec-messages.h"
@@ -23,7 +23,7 @@
 #include "ec-method.h"
 #include "ec-code.h"
 #include "ec-heald.h"
-#include "events.h"
+#include <glusterfs/events.h>
 
 static char *ec_read_policies[EC_READ_POLICY_MAX + 1] = {
     [EC_ROUND_ROBIN] = "round-robin",
@@ -1666,4 +1666,22 @@ struct volume_options options[] = {
                     "specially for sequential writes. However, this will also"
                     "lead to extra memory consumption, maximum "
                     "(cache size * stripe size) Bytes per open file."},
-    {.key = {NULL}}};
+    {
+        .key = {NULL},
+    },
+};
+
+xlator_api_t xlator_api = {
+    .init = init,
+    .fini = fini,
+    .notify = notify,
+    .reconfigure = reconfigure,
+    .mem_acct_init = mem_acct_init,
+    .op_version = {1},
+    .dumpops = &dumpops,
+    .fops = &fops,
+    .cbks = &cbks,
+    .options = options,
+    .identifier = "disperse",
+    .category = GF_MAINTAINED,
+};

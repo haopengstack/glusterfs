@@ -8,13 +8,13 @@
    cases as published by the Free Software Foundation.
 */
 
-#include "xlator.h"
-#include "defaults.h"
+#include <glusterfs/xlator.h>
+#include <glusterfs/defaults.h>
 
 #include "meta-mem-types.h"
 #include "meta.h"
 
-#include "compat-errno.h"
+#include <glusterfs/compat-errno.h>
 
 int
 meta_default_fgetxattr(call_frame_t *frame, xlator_t *this, fd_t *fd,
@@ -119,7 +119,7 @@ meta_default_readv(call_frame_t *frame, xlator_t *this, fd_t *fd, size_t size,
     struct iobuf *iobuf = NULL;
     struct iobref *iobref = NULL;
     off_t copy_offset = 0;
-    size_t copy_size = 0;
+    int copy_size = 0;
     struct iatt iatt = {};
 
     meta_fd = meta_fd_get(fd, this);
@@ -241,6 +241,7 @@ meta_default_readlink(call_frame_t *frame, xlator_t *this, loc_t *loc,
     struct meta_ops *ops = NULL;
     strfd_t *strfd = NULL;
     struct iatt iatt = {};
+    int len = -1;
 
     ops = meta_ops_get(loc->inode, this);
     if (!ops->link_fill) {
@@ -258,10 +259,10 @@ meta_default_readlink(call_frame_t *frame, xlator_t *this, loc_t *loc,
 
     meta_iatt_fill(&iatt, loc->inode, IA_IFLNK);
 
-    if (strfd->data)
-        META_STACK_UNWIND(readlink, frame, strlen(strfd->data), 0, strfd->data,
-                          &iatt, xdata);
-    else
+    if (strfd->data) {
+        len = strlen(strfd->data);
+        META_STACK_UNWIND(readlink, frame, len, 0, strfd->data, &iatt, xdata);
+    } else
         META_STACK_UNWIND(readlink, frame, -1, ENODATA, 0, 0, 0);
 
     strfd_close(strfd);

@@ -40,19 +40,19 @@
 #include <sys/resource.h>
 #endif
 
-#include "compat-errno.h"
-#include "logging.h"
-#include "common-utils.h"
-#include "revision.h"
-#include "glusterfs.h"
-#include "stack.h"
-#include "lkowner.h"
-#include "syscall.h"
+#include "glusterfs/compat-errno.h"
+#include "glusterfs/logging.h"
+#include "glusterfs/common-utils.h"
+#include "glusterfs/revision.h"
+#include "glusterfs/glusterfs.h"
+#include "glusterfs/stack.h"
+#include "glusterfs/lkowner.h"
+#include "glusterfs/syscall.h"
 #include "cli1-xdr.h"
 #define XXH_INLINE_ALL
 #include "xxhash.h"
 #include <ifaddrs.h>
-#include "libglusterfs-messages.h"
+#include "glusterfs/libglusterfs-messages.h"
 #include "protocol-common.h"
 #ifdef __FreeBSD__
 #include <pthread_np.h>
@@ -2281,7 +2281,7 @@ next_token(char **tokenp, token_iter_t *tit)
  * #include <stdio.h>
  * #include <stdlib.h>
  * #include <string.h>
- * #include "common-utils.h"
+ * #include "glusterfs/common-utils.h"
  *
  * int
  * main (int argc, char **argv)
@@ -3259,7 +3259,7 @@ gf_ports_reserved(char *blocked_port, unsigned char *ports, uint32_t ceiling)
         if (blocked_port[strlen(blocked_port) - 1] == '\n')
             blocked_port[strlen(blocked_port) - 1] = '\0';
         if (gf_string2int32(blocked_port, &tmp_port1) == 0) {
-            if (tmp_port1 > ceiling || tmp_port1 < 0) {
+            if (tmp_port1 > GF_PORT_MAX || tmp_port1 < 0) {
                 gf_msg("glusterfs-socket", GF_LOG_WARNING, 0,
                        LG_MSG_INVALID_PORT, "invalid port %d", tmp_port1);
                 result = _gf_true;
@@ -4332,7 +4332,7 @@ gf_backtrace_fillframes(char *buf)
 
     pos = 0;
     for (idx = 0; idx < frames - 2; idx++) {
-        ret = fscanf(fp, "%s", callingfn[idx]);
+        ret = fscanf(fp, "%1023s", callingfn[idx]);
         if (ret == EOF)
             break;
         inc = gf_backtrace_append(buf, pos, callingfn[idx]);

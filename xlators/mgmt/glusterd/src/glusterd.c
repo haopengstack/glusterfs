@@ -14,20 +14,20 @@
 #include <sys/resource.h>
 
 #include <libgen.h>
-#include "compat-uuid.h"
+#include <glusterfs/compat-uuid.h>
 
 #include "glusterd.h"
 #include "rpcsvc.h"
 #include "fnmatch.h"
-#include "xlator.h"
-#include "call-stub.h"
-#include "defaults.h"
-#include "list.h"
-#include "dict.h"
-#include "options.h"
-#include "compat.h"
-#include "compat-errno.h"
-#include "syscall.h"
+#include <glusterfs/xlator.h>
+#include <glusterfs/call-stub.h>
+#include <glusterfs/defaults.h>
+#include <glusterfs/list.h>
+#include <glusterfs/dict.h>
+#include <glusterfs/options.h>
+#include <glusterfs/compat.h>
+#include <glusterfs/compat-errno.h>
+#include <glusterfs/syscall.h>
 #include "glusterd-statedump.h"
 #include "glusterd-sm.h"
 #include "glusterd-op-sm.h"
@@ -43,13 +43,13 @@
 #include "glusterd-quotad-svc.h"
 #include "glusterd-snapd-svc.h"
 #include "glusterd-messages.h"
-#include "common-utils.h"
+#include <glusterfs/common-utils.h>
 #include "glusterd-geo-rep.h"
-#include "run.h"
+#include <glusterfs/run.h>
 #include "rpc-clnt-ping.h"
 #include "rpc-common-xdr.h"
 
-#include "syncop.h"
+#include <glusterfs/syncop.h>
 
 #include "glusterd-mountbroker.h"
 
@@ -1404,6 +1404,7 @@ init(xlator_t *this)
     gf_boolean_t downgrade = _gf_false;
     char *localtime_logging = NULL;
     int32_t len = 0;
+    int op_version = 0;
 
 #ifndef GF_DARWIN_HOST_OS
     {
@@ -1979,16 +1980,32 @@ init(xlator_t *this)
     }
 
     GF_ATOMIC_INIT(conf->blockers, 0);
+    ret = glusterd_handle_upgrade_downgrade(this->options, conf, upgrade,
+                                            downgrade);
+    if (ret)
+        goto out;
+
+    ret = glusterd_retrieve_max_op_version(this, &op_version);
+    /* first condition indicates file isn't present which means this code
+     * change is hitting for the first time or someone has deleted it from the
+     * backend.second condition is when max op_version differs, in both cases
+     * volfiles should be regenerated
+     */
+    if (op_version == 0 || op_version != GD_OP_VERSION_MAX) {
+        gf_log(this->name, GF_LOG_INFO,
+               "Regenerating volfiles due to a max op-version mismatch or "
+               "glusterd.upgrade file not being present, op_version retrieved:"
+               "%d, max op_version: %d",
+               op_version, GD_OP_VERSION_MAX);
+        glusterd_recreate_volfiles(conf);
+        ret = glusterd_store_max_op_version(this);
+    }
+
     /* If the peer count is less than 2 then this would be the best time to
      * spawn process/bricks that may need (re)starting since last time
      * (this) glusterd was up. */
     if (glusterd_get_peers_count() < 2)
         glusterd_launch_synctask(glusterd_spawn_daemons, NULL);
-
-    ret = glusterd_handle_upgrade_downgrade(this->options, conf, upgrade,
-                                            downgrade);
-    if (ret)
-        goto out;
 
     ret = glusterd_hooks_spawn_worker(this);
     if (ret)
@@ -2207,4 +2224,16 @@ struct volume_options options[] = {
                     " responses faster, depending on available processing"
                     " power. Range 1-32 threads."},
     {.key = {NULL}},
+};
+
+xlator_api_t xlator_api = {
+    .init = init,
+    .fini = fini,
+    .mem_acct_init = mem_acct_init,
+    .op_version = {1}, /* Present from the initial version */
+    .fops = &fops,
+    .cbks = &cbks,
+    .options = options,
+    .identifier = "glusterd",
+    .category = GF_MAINTAINED,
 };

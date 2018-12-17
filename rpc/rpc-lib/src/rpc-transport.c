@@ -15,14 +15,14 @@
 #include <fnmatch.h>
 #include <stdint.h>
 
-#include "logging.h"
+#include <glusterfs/logging.h>
 #include "rpc-transport.h"
-#include "glusterfs.h"
+#include <glusterfs/glusterfs.h>
 /* FIXME: xlator.h is needed for volume_option_t, need to define the datatype
  * in some other header
  */
-#include "xlator.h"
-#include "list.h"
+#include <glusterfs/xlator.h>
+#include <glusterfs/list.h>
 
 #ifndef GF_OPTION_LIST_EMPTY
 #define GF_OPTION_LIST_EMPTY(_opt) (_opt->value[0] == NULL)
@@ -159,6 +159,26 @@ out:
     return msg;
 }
 
+void
+rpc_transport_cleanup(rpc_transport_t *trans)
+{
+    if (!trans)
+        return;
+
+    if (trans->fini)
+        trans->fini(trans);
+
+    GF_FREE(trans->name);
+
+    if (trans->xl)
+        pthread_mutex_destroy(&trans->lock);
+
+    if (trans->dl_handle)
+        dlclose(trans->dl_handle);
+
+    GF_FREE(trans);
+}
+
 rpc_transport_t *
 rpc_transport_load(glusterfs_ctx_t *ctx, dict_t *options, char *trans_name)
 {
@@ -266,6 +286,10 @@ rpc_transport_load(glusterfs_ctx_t *ctx, dict_t *options, char *trans_name)
         goto fail;
     }
 
+    if (dict_get(options, "notify-poller-death")) {
+        trans->notify_poller_death = 1;
+    }
+
     gf_log("rpc-transport", GF_LOG_DEBUG, "attempt to load file %s", name);
 
     handle = dlopen(name, RTLD_NOW);
@@ -350,15 +374,7 @@ rpc_transport_load(glusterfs_ctx_t *ctx, dict_t *options, char *trans_name)
 
 fail:
     if (!success) {
-        if (trans) {
-            GF_FREE(trans->name);
-
-            if (trans->dl_handle)
-                dlclose(trans->dl_handle);
-
-            GF_FREE(trans);
-        }
-
+        rpc_transport_cleanup(trans);
         GF_FREE(name);
 
         return_trans = NULL;

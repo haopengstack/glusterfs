@@ -13,7 +13,7 @@ AC_INIT([glusterfs],
 AC_SUBST([PACKAGE_RELEASE],
          [m4_esyscmd([build-aux/pkg-version --release])])
 
-AM_INIT_AUTOMAKE(tar-pax)
+AM_INIT_AUTOMAKE([tar-pax foreign])
 
 # Removes warnings when using automake 1.14 around (...but option 'subdir-objects' is disabled )
 #but libglusterfs fails to build with contrib (Then are not set up that way?)
@@ -81,8 +81,6 @@ AC_CONFIG_FILES([Makefile
                 xlators/performance/io-threads/src/Makefile
                 xlators/performance/io-cache/Makefile
                 xlators/performance/io-cache/src/Makefile
-                xlators/performance/symlink-cache/Makefile
-                xlators/performance/symlink-cache/src/Makefile
                 xlators/performance/quick-read/Makefile
                 xlators/performance/quick-read/src/Makefile
                 xlators/performance/open-behind/Makefile
@@ -174,11 +172,6 @@ AC_CONFIG_FILES([Makefile
                 xlators/playground/Makefile
                 xlators/playground/template/Makefile
                 xlators/playground/template/src/Makefile
-                xlators/encryption/Makefile
-                xlators/encryption/rot-13/Makefile
-                xlators/encryption/rot-13/src/Makefile
-                xlators/encryption/crypt/Makefile
-                xlators/encryption/crypt/src/Makefile
                 xlators/system/Makefile
                 xlators/system/posix-acl/Makefile
                 xlators/system/posix-acl/src/Makefile
@@ -297,6 +290,19 @@ if test "x$enable_asan" = "xyes"; then
         GF_LDFLAGS="-lasan ${GF_LDFLAGS}"
 else
         BUILD_ASAN=no
+fi
+
+AC_ARG_ENABLE([atan],
+              AC_HELP_STRING([--enable-tsan],
+                             [Enable ThreadSanitizer support]))
+if test "x$enable_tsan" = "xyes"; then
+        BUILD_TSAN=yes
+        AC_CHECK_LIB([tsan], [__tsan_init], ,
+                [AC_MSG_ERROR([libtsan.so not found, this is required for --enable-tsan])])
+        GF_CFLAGS="${GF_CFLAGS} -O2 -g -fsanitize=thread"
+        GF_LDFLAGS="${GF_LDFLAGS} -ltsan"
+else
+        BUILD_TSAN=no
 fi
 
 
@@ -661,34 +667,16 @@ if test "x$enable_fuse_client" != "xno"; then
    BUILD_FUSE_CLIENT="yes"
 fi
 
+AC_SUBST(FUSE_CLIENT_SUBDIR)
+# end FUSE section
+
+
 AC_CHECK_LIB([ssl], TLS_method, [HAVE_OPENSSL_1_1="yes"], [HAVE_OPENSSL_1_1="no"])
 if test "x$HAVE_OPENSSL_1_1" = "xyes"; then
     AC_DEFINE([HAVE_TLS_METHOD], [1], [Using OpenSSL-1.1 TLS_method])
 else
     AC_CHECK_LIB([ssl], TLSv1_2_method, [AC_DEFINE([HAVE_TLSV1_2_METHOD], [1], [Using OpenSSL-1.0 TLSv1_2_method])])
 fi
-
-# start encryption/crypt section
-
-AC_CHECK_HEADERS([openssl/cmac.h], [have_cmac_h=yes], [have_cmac_h=no])
-
-AC_ARG_ENABLE([crypt-xlator],
-        AC_HELP_STRING([--enable-crypt-xlator], [Build crypt encryption xlator]))
-
-if test "x$enable_crypt_xlator" = "xyes" -a "x$have_cmac_h" = "xno"; then
-   AC_MSG_ERROR([Encryption xlator requires OpenSSL with cmac.h])
-fi
-
-BUILD_CRYPT_XLATOR=no
-if test "x$enable_crypt_xlator" != "xno" -a "x$have_cmac_h" = "xyes"; then
-   BUILD_CRYPT_XLATOR=yes
-   AC_DEFINE(HAVE_CRYPT_XLATOR, 1, [enable building crypt encryption xlator])
-fi
-
-AM_CONDITIONAL([ENABLE_CRYPT_XLATOR], [test x$BUILD_CRYPT_XLATOR = xyes])
-
-AC_SUBST(FUSE_CLIENT_SUBDIR)
-# end FUSE section
 
 
 # FUSERMOUNT section
@@ -1026,6 +1014,25 @@ fi
 AC_CHECK_FUNC([posix_fallocate], [have_posix_fallocate=yes])
 if test "x${have_posix_fallocate}" = "xyes"; then
    AC_DEFINE(HAVE_POSIX_FALLOCATE, 1, [define if posix_fallocate exists])
+fi
+
+# On fedora-29, copy_file_range syscall and the libc API both are present.
+# Whereas, on some machines such as centos-7, RHEL-7, the API is not there.
+# Only the system call is present. So, this change is to determine whether
+# the API is present or not. If not, then check whether the system call is
+# present or not. Accordingly sys_copy_file_range function will first call
+# the API if it is there. Otherwise it will call syscall(SYS_copy_file_range).
+AC_CHECK_FUNC([copy_file_range], [have_copy_file_range=yes])
+if test "x${have_copy_file_range}" = "xyes"; then
+   AC_DEFINE(HAVE_COPY_FILE_RANGE, 1, [define if copy_file_range exists])
+else
+   OLD_CFLAGS=${CFLAGS}
+   CFLAGS="-D_GNU_SOURCE"
+   AC_CHECK_DECL([SYS_copy_file_range], , , [#include <sys/syscall.h>])
+   if test "x${ac_cv_have_decl_SYS_copy_file_range}" = "xyes"; then
+      AC_DEFINE(HAVE_COPY_FILE_RANGE_SYS, 1, [define if SYS_copy_file_range is available])
+   fi
+   CFLAGS=${OLD_CFLAGS}
 fi
 
 BUILD_NANOSECOND_TIMESTAMPS=no
@@ -1597,6 +1604,7 @@ echo "georeplication       : $BUILD_SYNCDAEMON"
 echo "Linux-AIO            : $BUILD_LIBAIO"
 echo "Enable Debug         : $BUILD_DEBUG"
 echo "Enable ASAN          : $BUILD_ASAN"
+echo "Enable TSAN          : $BUILD_TSAN"
 echo "Use syslog           : $USE_SYSLOG"
 echo "XML output           : $BUILD_XML_OUTPUT"
 echo "Encryption xlator    : $BUILD_CRYPT_XLATOR"

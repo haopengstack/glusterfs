@@ -7,7 +7,7 @@
    later), or the GNU General Public License, version 2 (GPLv2), in all
    cases as published by the Free Software Foundation.
 */
-#include "common-utils.h"
+#include <glusterfs/common-utils.h>
 #include "cli1-xdr.h"
 #include "xdr-generic.h"
 #include "glusterd.h"
@@ -20,9 +20,9 @@
 #include "glusterd-svc-helper.h"
 #include "glusterd-messages.h"
 #include "glusterd-server-quorum.h"
-#include "run.h"
+#include <glusterfs/run.h>
 #include "glusterd-volgen.h"
-#include "syscall.h"
+#include <glusterfs/syscall.h>
 #include <sys/signal.h>
 
 /* misc */
@@ -1904,7 +1904,7 @@ glusterd_remove_brick_validate_bricks(gf1_op_commands cmd, int32_t brick_count,
             continue;
         }
 
-        rcu_read_lock();
+        RCU_READ_LOCK;
         peerinfo = glusterd_peerinfo_find_by_uuid(brickinfo->uuid);
         if (!peerinfo) {
             snprintf(msg, sizeof(msg),
@@ -1913,7 +1913,7 @@ glusterd_remove_brick_validate_bricks(gf1_op_commands cmd, int32_t brick_count,
                      brick);
             *errstr = gf_strdup(msg);
             ret = -1;
-            rcu_read_unlock();
+            RCU_READ_UNLOCK;
             goto out;
         }
         if (!peerinfo->connected) {
@@ -1923,10 +1923,10 @@ glusterd_remove_brick_validate_bricks(gf1_op_commands cmd, int32_t brick_count,
                      brick);
             *errstr = gf_strdup(msg);
             ret = -1;
-            rcu_read_unlock();
+            RCU_READ_UNLOCK;
             goto out;
         }
-        rcu_read_unlock();
+        RCU_READ_UNLOCK;
     }
 
 out:

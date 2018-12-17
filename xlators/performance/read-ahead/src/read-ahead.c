@@ -15,12 +15,12 @@
   - ensure efficient memory management in case of random seek
 */
 
-#include "glusterfs.h"
-#include "logging.h"
-#include "dict.h"
-#include "xlator.h"
+#include <glusterfs/glusterfs.h>
+#include <glusterfs/logging.h>
+#include <glusterfs/dict.h>
+#include <glusterfs/xlator.h>
 #include "read-ahead.h"
-#include "statedump.h"
+#include <glusterfs/statedump.h>
 #include <assert.h>
 #include <sys/time.h>
 #include "read-ahead-messages.h"
@@ -268,7 +268,7 @@ read_ahead(call_frame_t *frame, ra_file_t *file)
     }
 
     ra_size = file->page_size * file->page_count;
-    ra_offset = floor(file->offset, file->page_size);
+    ra_offset = gf_floor(file->offset, file->page_size);
     cap = file->size ? file->size : file->offset + ra_size;
 
     while (ra_offset < min(file->offset + ra_size, cap)) {
@@ -354,8 +354,8 @@ dispatch_requests(call_frame_t *frame, ra_file_t *file)
     local = frame->local;
     conf = file->conf;
 
-    rounded_offset = floor(local->offset, file->page_size);
-    rounded_end = roof(local->offset + local->size, file->page_size);
+    rounded_offset = gf_floor(local->offset, file->page_size);
+    rounded_end = gf_roof(local->offset + local->size, file->page_size);
 
     trav_offset = rounded_offset;
 
@@ -509,7 +509,7 @@ ra_readv(call_frame_t *frame, xlator_t *this, fd_t *fd, size_t size,
 
     dispatch_requests(frame, file);
 
-    flush_region(frame, file, 0, floor(offset, file->page_size), 0);
+    flush_region(frame, file, 0, gf_floor(offset, file->page_size), 0);
 
     read_ahead(frame, file);
 
@@ -1222,6 +1222,14 @@ struct xlator_dumpops dumpops = {
 };
 
 struct volume_options options[] = {
+    {
+        .key = {"read-ahead"},
+        .type = GF_OPTION_TYPE_BOOL,
+        .default_value = "off",
+        .description = "enable/disable read-ahead",
+        .op_version = {GD_OP_VERSION_6_0},
+        .flags = OPT_FLAG_SETTABLE,
+    },
     {.key = {"force-atime-update"},
      .type = GF_OPTION_TYPE_BOOL,
      .op_version = {1},
@@ -1252,4 +1260,18 @@ struct volume_options options[] = {
      .tags = {"read-ahead"},
      .description = "Enable/Disable read ahead translator"},
     {.key = {NULL}},
+};
+
+xlator_api_t xlator_api = {
+    .init = init,
+    .fini = fini,
+    .reconfigure = reconfigure,
+    .mem_acct_init = mem_acct_init,
+    .op_version = {1}, /* Present from the initial version */
+    .dumpops = &dumpops,
+    .fops = &fops,
+    .cbks = &cbks,
+    .options = options,
+    .identifier = "read-ahead",
+    .category = GF_MAINTAINED,
 };

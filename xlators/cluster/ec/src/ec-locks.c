@@ -8,8 +8,8 @@
   cases as published by the Free Software Foundation.
 */
 
-#include "xlator.h"
-#include "defaults.h"
+#include <glusterfs/xlator.h>
+#include <glusterfs/defaults.h>
 
 #include "ec-helpers.h"
 #include "ec-common.h"
@@ -285,7 +285,6 @@ ec_entrylk(call_frame_t *frame, xlator_t *this, uintptr_t target,
 
     gf_msg_trace("ec", 0, "EC(ENTRYLK) %p", frame);
 
-    VALIDATE_OR_GOTO(this, out);
     GF_VALIDATE_OR_GOTO(this->name, frame, out);
     GF_VALIDATE_OR_GOTO(this->name, this->private, out);
 

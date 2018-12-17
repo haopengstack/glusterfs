@@ -1415,7 +1415,6 @@ struct volopt_map_entry glusterd_volopt_map[] = {
     {.key = "network.ping-timeout",
      .voltype = "protocol/client",
      .op_version = 1,
-     .value = "42",
      .flags = VOLOPT_FLAG_CLIENT_OPT},
     {.key = "network.tcp-window-size",
      .voltype = "protocol/client",
@@ -1503,6 +1502,10 @@ struct volopt_map_entry glusterd_volopt_map[] = {
      .voltype = "protocol/server",
      .option = "root-squash",
      .op_version = 2},
+    {.key = "server.all-squash",
+     .voltype = "protocol/server",
+     .option = "all-squash",
+     .op_version = GD_OP_VERSION_6_0},
     {.key = "server.anonuid",
      .voltype = "protocol/server",
      .option = "anonuid",
@@ -1577,7 +1580,6 @@ struct volopt_map_entry glusterd_volopt_map[] = {
         .voltype = "protocol/server",
         .option = "transport.tcp-user-timeout",
         .op_version = GD_OP_VERSION_3_10_2,
-        .value = "0", /* 0 - implies "use system default" */
     },
     {
         .key = "server.keepalive-time",
@@ -2801,7 +2803,7 @@ struct volopt_map_entry glusterd_volopt_map[] = {
                     "brick process."},
     {.key = GLUSTERD_BRICKMUX_LIMIT_KEY,
      .voltype = "mgmt/glusterd",
-     .value = "0",
+     .value = GLUSTERD_BRICKMUX_LIMIT_DFLT_VALUE,
      .op_version = GD_OP_VERSION_3_12_0,
      .validate_fn = validate_mux_limit,
      .type = GLOBAL_DOC,
@@ -2848,6 +2850,15 @@ struct volopt_map_entry glusterd_volopt_map[] = {
      .voltype = "cluster/replicate",
      .op_version = GD_OP_VERSION_3_11_0,
      .flags = VOLOPT_FLAG_CLIENT_OPT},
+    {.key = VKEY_FEATURES_SELINUX,
+     .voltype = "features/selinux",
+     .type = NO_DOC,
+     .value = "on",
+     .op_version = GD_OP_VERSION_3_11_0,
+     .description = "Convert security.selinux xattrs to "
+                    "trusted.gluster.selinux on the bricks. Recommended "
+                    "to have enabled when clients and/or bricks support "
+                    "SELinux."},
     {.key = GLUSTERD_LOCALTIME_LOGGING_KEY,
      .voltype = "mgmt/glusterd",
      .type = GLOBAL_DOC,

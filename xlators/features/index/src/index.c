@@ -8,11 +8,11 @@
    cases as published by the Free Software Foundation.
 */
 #include "index.h"
-#include "options.h"
+#include <glusterfs/options.h>
 #include "glusterfs3-xdr.h"
-#include "syscall.h"
-#include "syncop.h"
-#include "common-utils.h"
+#include <glusterfs/syscall.h>
+#include <glusterfs/syncop.h>
+#include <glusterfs/common-utils.h>
 #include "index-messages.h"
 #include <ftw.h>
 #include <libgen.h> /* for dirname() */
@@ -2660,4 +2660,18 @@ struct volume_options options[] = {
      .description = "Comma separated list of xattrs that are watched",
      .default_value = "trusted.afr.{{ volume.name }}"},
     {.key = {NULL}},
+};
+
+xlator_api_t xlator_api = {
+    .init = init,
+    .fini = fini,
+    .notify = notify,
+    .mem_acct_init = mem_acct_init,
+    .op_version = {1}, /* Present from the initial version */
+    .dumpops = &dumpops,
+    .fops = &fops,
+    .cbks = &cbks,
+    .options = options,
+    .identifier = "index",
+    .category = GF_MAINTAINED,
 };

@@ -9,8 +9,8 @@
  */
 
 #include "nl-cache.h"
-#include "statedump.h"
-#include "upcall-utils.h"
+#include <glusterfs/statedump.h>
+#include <glusterfs/upcall-utils.h>
 
 static void
 nlc_dentry_op(call_frame_t *frame, xlator_t *this, gf_boolean_t multilink)
@@ -778,6 +778,14 @@ struct xlator_dumpops nlc_dumpops = {
 };
 
 struct volume_options nlc_options[] = {
+    {
+        .key = {"nl-cache"},
+        .type = GF_OPTION_TYPE_BOOL,
+        .default_value = "off",
+        .description = "enable/disable nl-cache",
+        .op_version = {GD_OP_VERSION_6_0},
+        .flags = OPT_FLAG_SETTABLE,
+    },
     {
         .key = {"nl-cache-positive-entry"},
         .type = GF_OPTION_TYPE_BOOL,

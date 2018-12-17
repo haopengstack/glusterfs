@@ -9,13 +9,13 @@
 */
 
 #include <math.h>
-#include "glusterfs.h"
-#include "logging.h"
-#include "dict.h"
-#include "xlator.h"
+#include <glusterfs/glusterfs.h>
+#include <glusterfs/logging.h>
+#include <glusterfs/dict.h>
+#include <glusterfs/xlator.h>
 #include "io-cache.h"
 #include "ioc-mem-types.h"
-#include "statedump.h"
+#include <glusterfs/statedump.h>
 #include <assert.h>
 #include <sys/time.h>
 #include "io-cache-messages.h"
@@ -413,6 +413,7 @@ ioc_cache_validate_cbk(call_frame_t *frame, void *cookie, xlator_t *this,
      * fd_ref on fd, safe to unref validate frame's private copy
      */
     fd_unref(local->fd);
+    dict_unref(local->xattr_req);
 
     STACK_DESTROY(frame->root);
 
@@ -495,10 +496,13 @@ ioc_cache_validate(call_frame_t *frame, ioc_inode_t *ioc_inode, fd_t *fd,
 
     validate_local->fd = fd_ref(fd);
     validate_local->inode = ioc_inode;
+    if (local && local->xattr_req)
+        validate_local->xattr_req = dict_ref(local->xattr_req);
     validate_frame->local = validate_local;
 
     STACK_WIND(validate_frame, ioc_cache_validate_cbk, FIRST_CHILD(frame->this),
-               FIRST_CHILD(frame->this)->fops->fstat, fd, NULL);
+               FIRST_CHILD(frame->this)->fops->fstat, fd,
+               validate_local->xattr_req);
 
 out:
     return ret;
@@ -926,8 +930,8 @@ ioc_dispatch_requests(call_frame_t *frame, ioc_inode_t *ioc_inode, fd_t *fd,
     local = frame->local;
     table = ioc_inode->table;
 
-    rounded_offset = floor(offset, table->page_size);
-    rounded_end = roof(offset + size, table->page_size);
+    rounded_offset = gf_floor(offset, table->page_size);
+    rounded_end = gf_roof(offset + size, table->page_size);
     trav_offset = rounded_offset;
 
     /* once a frame does read, it should be waiting on something */
@@ -1141,6 +1145,7 @@ ioc_readv(call_frame_t *frame, xlator_t *this, fd_t *fd, size_t size,
     local->offset = offset;
     local->size = size;
     local->inode = ioc_inode;
+    local->xattr_req = dict_ref(xdata);
 
     gf_msg_trace(this->name, 0,
                  "NEW REQ (%p) offset "
@@ -2121,6 +2126,14 @@ struct xlator_cbks cbks = {
 };
 
 struct volume_options options[] = {
+    {
+        .key = {"io-cache"},
+        .type = GF_OPTION_TYPE_BOOL,
+        .default_value = "off",
+        .description = "enable/disable io-cache",
+        .op_version = {GD_OP_VERSION_6_0},
+        .flags = OPT_FLAG_SETTABLE,
+    },
     {.key = {"priority"},
      .type = GF_OPTION_TYPE_PRIORITY_LIST,
      .default_value = "",
@@ -2170,4 +2183,18 @@ struct volume_options options[] = {
      .tags = {"io-cache"},
      .description = "Enable/Disable io cache translator"},
     {.key = {NULL}},
+};
+
+xlator_api_t xlator_api = {
+    .init = init,
+    .fini = fini,
+    .reconfigure = reconfigure,
+    .mem_acct_init = mem_acct_init,
+    .op_version = {1}, /* Present from the initial version */
+    .dumpops = &dumpops,
+    .fops = &fops,
+    .cbks = &cbks,
+    .options = options,
+    .identifier = "io-cache",
+    .category = GF_MAINTAINED,
 };

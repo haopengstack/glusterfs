@@ -15,19 +15,19 @@
 #include <stdlib.h>
 #include <signal.h>
 
-#include "glusterfs.h"
+#include <glusterfs/glusterfs.h>
 #include "afr.h"
-#include "dict.h"
-#include "xlator.h"
-#include "hashfn.h"
-#include "logging.h"
-#include "list.h"
-#include "call-stub.h"
-#include "defaults.h"
-#include "common-utils.h"
-#include "compat-errno.h"
-#include "compat.h"
-#include "byte-order.h"
+#include <glusterfs/dict.h>
+#include <glusterfs/xlator.h>
+#include <glusterfs/hashfn.h>
+#include <glusterfs/logging.h>
+#include <glusterfs/list.h>
+#include <glusterfs/call-stub.h>
+#include <glusterfs/defaults.h>
+#include <glusterfs/common-utils.h>
+#include <glusterfs/compat-errno.h>
+#include <glusterfs/compat.h>
+#include <glusterfs/byte-order.h>
 
 #include "afr.h"
 #include "afr-transaction.h"
@@ -98,7 +98,9 @@ __afr_dir_write_finalize(call_frame_t *frame, xlator_t *this)
     }
 
     if (local->inode) {
-        afr_replies_interpret(frame, this, local->inode, NULL);
+        if (local->op != GF_FOP_RENAME && local->op != GF_FOP_LINK)
+            afr_replies_interpret(frame, this, local->inode, NULL);
+
         inode_read_subvol = afr_data_subvol_get(local->inode, this, NULL, NULL,
                                                 NULL, &args);
     }

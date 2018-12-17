@@ -20,20 +20,20 @@
 #include <libxml/xmlwriter.h>
 #endif
 
-#include "glusterfs.h"
-#include "compat.h"
-#include "dict.h"
-#include "xlator.h"
-#include "logging.h"
+#include <glusterfs/glusterfs.h>
+#include <glusterfs/compat.h>
+#include <glusterfs/dict.h>
+#include <glusterfs/xlator.h>
+#include <glusterfs/logging.h>
 #include "glusterd-messages.h"
-#include "timer.h"
-#include "defaults.h"
-#include "compat.h"
-#include "syncop.h"
-#include "run.h"
-#include "compat-errno.h"
-#include "statedump.h"
-#include "syscall.h"
+#include <glusterfs/timer.h>
+#include <glusterfs/defaults.h>
+#include <glusterfs/compat.h>
+#include <glusterfs/syncop.h>
+#include <glusterfs/run.h>
+#include <glusterfs/compat-errno.h>
+#include <glusterfs/statedump.h>
+#include <glusterfs/syscall.h>
 #include "glusterd-mem-types.h"
 #include "glusterd.h"
 #include "glusterd-op-sm.h"
@@ -43,7 +43,7 @@
 #include "glusterd-store.h"
 #include "glusterd-volgen.h"
 #include "glusterd-pmap.h"
-#include "glusterfs-acl.h"
+#include <glusterfs/glusterfs-acl.h>
 #include "glusterd-syncop.h"
 #include "glusterd-mgmt.h"
 #include "glusterd-locks.h"
@@ -59,8 +59,8 @@
 #include "glusterd-bitd-svc.h"
 #include "glusterd-gfproxyd-svc.h"
 #include "glusterd-server-quorum.h"
-#include "quota-common-utils.h"
-#include "common-utils.h"
+#include <glusterfs/quota-common-utils.h>
+#include <glusterfs/common-utils.h>
 
 #include "xdr-generic.h"
 #include <sys/resource.h>
@@ -139,15 +139,8 @@ get_mux_limit_per_process(int *mux_limit)
     ret = dict_get_strn(priv->opts, GLUSTERD_BRICKMUX_LIMIT_KEY,
                         SLEN(GLUSTERD_BRICKMUX_LIMIT_KEY), &value);
     if (ret) {
-        gf_msg_debug(this->name, 0,
-                     "Limit for number of bricks per "
-                     "brick process not yet set in dict. Returning "
-                     "limit as 0 denoting that multiplexing can "
-                     "happen with no limit set.");
-        ret = 0;
-        goto out;
+        value = GLUSTERD_BRICKMUX_LIMIT_DFLT_VALUE;
     }
-
     ret = gf_string2int(value, &max_bricks_per_proc);
     if (ret)
         goto out;
@@ -5166,6 +5159,11 @@ glusterd_add_node_to_dict(char *server, dict_t *dict, int count,
     priv = this->private;
     GF_ASSERT(priv);
 
+    if (!strcmp(server, "")) {
+        ret = 0;
+        goto out;
+    }
+
     glusterd_svc_build_pidfile_path(server, priv->rundir, pidfile,
                                     sizeof(pidfile));
 
@@ -9296,35 +9294,6 @@ glusterd_defrag_volume_status_update(glusterd_volinfo_t *volinfo,
 
     return ret;
 }
-/*
-   The function is required to take dict ref for every xlator at graph.
-   At the time of compare graph topology create a graph and populate
-   key values in the dictionary, after finished graph comparison we do destroy
-   the new graph.At the time of construct graph we don't take any reference
-   so to avoid leak due to ref counter underflow we need to call dict_ref here.
-
-*/
-
-void
-glusterd_graph_take_reference(xlator_t *tree)
-{
-    xlator_t *trav = tree;
-    xlator_t *prev = tree;
-
-    if (!tree) {
-        gf_msg("parser", GF_LOG_ERROR, 0, LG_MSG_TREE_NOT_FOUND,
-               "Translator tree not found");
-        return;
-    }
-
-    while (prev) {
-        trav = prev->next;
-        if (prev->options)
-            dict_ref(prev->options);
-        prev = trav;
-    }
-    return;
-}
 
 int
 glusterd_check_topology_identical(const char *filename1, const char *filename2,
@@ -9371,14 +9340,14 @@ glusterd_check_topology_identical(const char *filename1, const char *filename2,
     if (grph1 == NULL)
         goto out;
 
-    glusterd_graph_take_reference(grph1->first);
+    gluster_graph_take_reference(grph1->first);
 
     /* create the graph for filename2 */
     grph2 = glusterfs_graph_construct(fp2);
     if (grph2 == NULL)
         goto out;
 
-    glusterd_graph_take_reference(grph2->first);
+    gluster_graph_take_reference(grph2->first);
 
     /* compare the graph topology */
     *identical = is_graph_topology_equal(grph1, grph2);
@@ -10852,7 +10821,7 @@ glusterd_volume_rebalance_use_rsp_dict(dict_t *aggr, dict_t *rsp_dict)
         node_uuid_str = gf_strdup(node_uuid);
 
         /* Finding the index of the node-uuid in the peer-list */
-        rcu_read_lock();
+        RCU_READ_LOCK;
         cds_list_for_each_entry_rcu(peerinfo, &conf->peers, uuid_list)
         {
             peer_uuid_str = gd_peer_uuid_str(peerinfo);
@@ -10861,7 +10830,7 @@ glusterd_volume_rebalance_use_rsp_dict(dict_t *aggr, dict_t *rsp_dict)
 
             current_index++;
         }
-        rcu_read_unlock();
+        RCU_READ_UNLOCK;
 
         /* Setting the largest index value as the total count. */
         ret = dict_get_int32n(ctx_dict, "count", SLEN("count"), &count);
@@ -13795,7 +13764,7 @@ glusterd_count_connected_peers(int32_t *count)
 
     *count = 1;
 
-    rcu_read_lock();
+    RCU_READ_LOCK;
     cds_list_for_each_entry_rcu(peerinfo, &conf->peers, uuid_list)
     {
         /* Find peer who is connected and is a friend */
@@ -13804,7 +13773,7 @@ glusterd_count_connected_peers(int32_t *count)
             (*count)++;
         }
     }
-    rcu_read_unlock();
+    RCU_READ_UNLOCK;
 
     ret = 0;
 out:

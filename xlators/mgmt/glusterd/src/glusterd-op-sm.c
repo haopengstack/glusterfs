@@ -14,19 +14,19 @@
 #include <sys/mount.h>
 
 #include <libgen.h>
-#include "compat-uuid.h"
+#include <glusterfs/compat-uuid.h>
 
 #include "fnmatch.h"
-#include "xlator.h"
+#include <glusterfs/xlator.h>
 #include "protocol-common.h"
 #include "glusterd.h"
-#include "call-stub.h"
-#include "defaults.h"
-#include "list.h"
-#include "dict.h"
-#include "compat.h"
-#include "compat-errno.h"
-#include "statedump.h"
+#include <glusterfs/call-stub.h>
+#include <glusterfs/defaults.h>
+#include <glusterfs/list.h>
+#include <glusterfs/dict.h>
+#include <glusterfs/compat.h>
+#include <glusterfs/compat-errno.h>
+#include <glusterfs/statedump.h>
 #include "glusterd-sm.h"
 #include "glusterd-op-sm.h"
 #include "glusterd-utils.h"
@@ -37,10 +37,10 @@
 #include "glusterd-messages.h"
 #include "glusterd-utils.h"
 #include "glusterd-quota.h"
-#include "syscall.h"
+#include <glusterfs/syscall.h>
 #include "cli1-xdr.h"
-#include "common-utils.h"
-#include "run.h"
+#include <glusterfs/common-utils.h>
+#include <glusterfs/run.h>
 #include "glusterd-snapshot-utils.h"
 #include "glusterd-svc-mgmt.h"
 #include "glusterd-svc-helper.h"
@@ -85,7 +85,7 @@ glusterd_all_vol_opts valid_all_vol_opts[] = {
      * can be attached per process.
      * TBD: Discuss the default value for this. Maybe this should be a
      * dynamic value depending on the memory specifications per node */
-    {GLUSTERD_BRICKMUX_LIMIT_KEY, "0"},
+    {GLUSTERD_BRICKMUX_LIMIT_KEY, GLUSTERD_BRICKMUX_LIMIT_DFLT_VALUE},
     {GLUSTERD_LOCALTIME_LOGGING_KEY, "disable"},
     {GLUSTERD_DAEMON_LOG_LEVEL_KEY, "INFO"},
     {NULL},
@@ -1785,7 +1785,7 @@ glusterd_op_stage_sync_volume(dict_t *dict, char **op_errstr)
             ret = 0;
         }
     } else {
-        rcu_read_lock();
+        RCU_READ_LOCK;
 
         peerinfo = glusterd_peerinfo_find(NULL, hostname);
         if (peerinfo == NULL) {
@@ -1802,7 +1802,7 @@ glusterd_op_stage_sync_volume(dict_t *dict, char **op_errstr)
             ret = -1;
         }
 
-        rcu_read_unlock();
+        RCU_READ_UNLOCK;
     }
 
 out:
@@ -2002,7 +2002,7 @@ out:
     return ret;
 }
 
-static int
+int
 glusterd_op_stage_stats_volume(dict_t *dict, char **op_errstr)
 {
     int ret = -1;
@@ -3252,7 +3252,7 @@ glusterd_remove_profile_volume_options(glusterd_volinfo_t *volinfo)
     dict_del_sizen(volinfo->dict, VKEY_DIAG_CNT_FOP_HITS);
 }
 
-static int
+int
 glusterd_op_stats_volume(dict_t *dict, char **op_errstr, dict_t *rsp_dict)
 {
     int ret = -1;
@@ -3861,7 +3861,7 @@ glusterd_op_ac_send_lock(glusterd_op_sm_event_t *event, void *ctx)
     priv = this->private;
     GF_ASSERT(priv);
 
-    rcu_read_lock();
+    RCU_READ_LOCK;
     cds_list_for_each_entry_rcu(peerinfo, &priv->peers, uuid_list)
     {
         /* Only send requests to peers who were available before the
@@ -3882,7 +3882,7 @@ glusterd_op_ac_send_lock(glusterd_op_sm_event_t *event, void *ctx)
             if (proc->fn) {
                 ret = proc->fn(NULL, this, peerinfo);
                 if (ret) {
-                    rcu_read_unlock();
+                    RCU_READ_UNLOCK;
                     gf_msg(this->name, GF_LOG_WARNING, 0,
                            GD_MSG_LOCK_REQ_SEND_FAIL,
                            "Failed to send lock request "
@@ -3903,7 +3903,7 @@ glusterd_op_ac_send_lock(glusterd_op_sm_event_t *event, void *ctx)
             if (proc->fn) {
                 ret = dict_set_static_ptr(dict, "peerinfo", peerinfo);
                 if (ret) {
-                    rcu_read_unlock();
+                    RCU_READ_UNLOCK;
                     gf_msg(this->name, GF_LOG_ERROR, 0, GD_MSG_DICT_SET_FAILED,
                            "failed to set peerinfo");
                     dict_unref(dict);
@@ -3912,7 +3912,7 @@ glusterd_op_ac_send_lock(glusterd_op_sm_event_t *event, void *ctx)
 
                 ret = proc->fn(NULL, this, dict);
                 if (ret) {
-                    rcu_read_unlock();
+                    RCU_READ_UNLOCK;
                     gf_msg(this->name, GF_LOG_WARNING, 0,
                            GD_MSG_MGMTV3_LOCK_REQ_SEND_FAIL,
                            "Failed to send mgmt_v3 lock "
@@ -3928,7 +3928,7 @@ glusterd_op_ac_send_lock(glusterd_op_sm_event_t *event, void *ctx)
             }
         }
     }
-    rcu_read_unlock();
+    RCU_READ_UNLOCK;
 
     opinfo.pending_count = pending_count;
 
@@ -3964,7 +3964,7 @@ glusterd_op_ac_send_unlock(glusterd_op_sm_event_t *event, void *ctx)
     priv = this->private;
     GF_ASSERT(priv);
 
-    rcu_read_lock();
+    RCU_READ_LOCK;
     cds_list_for_each_entry_rcu(peerinfo, &priv->peers, uuid_list)
     {
         /* Only send requests to peers who were available before the
@@ -4036,7 +4036,7 @@ glusterd_op_ac_send_unlock(glusterd_op_sm_event_t *event, void *ctx)
             }
         }
     }
-    rcu_read_unlock();
+    RCU_READ_UNLOCK;
 
     opinfo.pending_count = pending_count;
 
@@ -4589,7 +4589,7 @@ glusterd_op_ac_send_stage_op(glusterd_op_sm_event_t *event, void *ctx)
         goto out;
     }
 
-    rcu_read_lock();
+    RCU_READ_LOCK;
     cds_list_for_each_entry_rcu(peerinfo, &priv->peers, uuid_list)
     {
         /* Only send requests to peers who were available before the
@@ -4609,7 +4609,7 @@ glusterd_op_ac_send_stage_op(glusterd_op_sm_event_t *event, void *ctx)
         if (proc->fn) {
             ret = dict_set_static_ptr(dict, "peerinfo", peerinfo);
             if (ret) {
-                rcu_read_unlock();
+                RCU_READ_UNLOCK;
                 gf_msg(this->name, GF_LOG_ERROR, 0, GD_MSG_DICT_SET_FAILED,
                        "failed to "
                        "set peerinfo");
@@ -4629,7 +4629,7 @@ glusterd_op_ac_send_stage_op(glusterd_op_sm_event_t *event, void *ctx)
             pending_count++;
         }
     }
-    rcu_read_unlock();
+    RCU_READ_UNLOCK;
 
     opinfo.pending_count = pending_count;
 out:
@@ -5216,7 +5216,7 @@ glusterd_op_ac_send_commit_op(glusterd_op_sm_event_t *event, void *ctx)
         goto out;
     }
 
-    rcu_read_lock();
+    RCU_READ_LOCK;
     cds_list_for_each_entry_rcu(peerinfo, &priv->peers, uuid_list)
     {
         /* Only send requests to peers who were available before the
@@ -5236,7 +5236,7 @@ glusterd_op_ac_send_commit_op(glusterd_op_sm_event_t *event, void *ctx)
         if (proc->fn) {
             ret = dict_set_static_ptr(dict, "peerinfo", peerinfo);
             if (ret) {
-                rcu_read_unlock();
+                RCU_READ_UNLOCK;
                 gf_msg(this->name, GF_LOG_ERROR, 0, GD_MSG_DICT_SET_FAILED,
                        "failed to set peerinfo");
                 goto out;
@@ -5254,7 +5254,7 @@ glusterd_op_ac_send_commit_op(glusterd_op_sm_event_t *event, void *ctx)
             pending_count++;
         }
     }
-    rcu_read_unlock();
+    RCU_READ_UNLOCK;
 
     opinfo.pending_count = pending_count;
     gf_msg_debug(this->name, 0,

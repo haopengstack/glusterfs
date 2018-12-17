@@ -18,10 +18,10 @@
 
 #include "glfs-internal.h"
 #include "glfs-mem-types.h"
-#include "syncop.h"
+#include <glusterfs/syncop.h>
 #include "glfs.h"
 #include "gfapi-messages.h"
-#include "compat-errno.h"
+#include <glusterfs/compat-errno.h>
 #include <limits.h>
 #include "glusterfs3.h"
 
@@ -30,6 +30,11 @@
 #else
 #define GF_NAME_MAX 255
 #endif
+
+struct upcall_syncop_args {
+    struct glfs *fs;
+    struct gf_upcall *upcall_data;
+};
 
 #define READDIRBUF_SIZE (sizeof(struct dirent) + GF_NAME_MAX + 1)
 
@@ -1326,6 +1331,161 @@ out:
 invalid_fs:
     return ret;
 }
+
+ssize_t
+pub_glfs_copy_file_range(struct glfs_fd *glfd_in, off64_t *off_in,
+                         struct glfs_fd *glfd_out, off64_t *off_out, size_t len,
+                         unsigned int flags, struct stat *statbuf,
+                         struct stat *prestat, struct stat *poststat)
+{
+    xlator_t *subvol = NULL;
+    int ret = -1;
+    fd_t *fd_in = NULL;
+    fd_t *fd_out = NULL;
+    struct iatt preiatt =
+                    {
+                        0,
+                    },
+                iattbuf =
+                    {
+                        0,
+                    },
+                postiatt = {
+                    0,
+                };
+    dict_t *fop_attr = NULL;
+    off64_t pos_in;
+    off64_t pos_out;
+
+    DECLARE_OLD_THIS;
+    __GLFS_ENTRY_VALIDATE_FD(glfd_in, invalid_fs);
+    __GLFS_ENTRY_VALIDATE_FD(glfd_out, invalid_fs);
+
+    GF_REF_GET(glfd_in);
+    GF_REF_GET(glfd_out);
+
+    if (glfd_in->fs != glfd_out->fs) {
+        ret = -1;
+        errno = EXDEV;
+        goto out;
+    }
+
+    subvol = glfs_active_subvol(glfd_in->fs);
+    if (!subvol) {
+        ret = -1;
+        errno = EIO;
+        goto out;
+    }
+
+    fd_in = glfs_resolve_fd(glfd_in->fs, subvol, glfd_in);
+    if (!fd_in) {
+        ret = -1;
+        errno = EBADFD;
+        goto out;
+    }
+
+    fd_out = glfs_resolve_fd(glfd_out->fs, subvol, glfd_out);
+    if (!fd_out) {
+        ret = -1;
+        errno = EBADFD;
+        goto out;
+    }
+
+    /*
+     * This is based on how the vfs layer in the kernel handles
+     * copy_file_range call. Upon receiving it follows the
+     * below method to consider the offset.
+     * if (off_in != NULL)
+     *    use the value off_in to perform the op
+     * else if off_in == NULL
+     *    use the current file offset position to perform the op
+     *
+     * For gfapi, glfd->offset is used. For a freshly opened
+     * fd, the offset is set to 0.
+     */
+    if (off_in)
+        pos_in = *off_in;
+    else
+        pos_in = glfd_in->offset;
+
+    if (off_out)
+        pos_out = *off_out;
+    else
+        pos_out = glfd_out->offset;
+
+    ret = get_fop_attr_thrd_key(&fop_attr);
+    if (ret)
+        gf_msg_debug("gfapi", 0, "Getting leaseid from thread failed");
+
+    ret = syncop_copy_file_range(subvol, fd_in, pos_in, fd_out, pos_out, len,
+                                 flags, &iattbuf, &preiatt, &postiatt, fop_attr,
+                                 NULL);
+    DECODE_SYNCOP_ERR(ret);
+
+    if (ret >= 0) {
+        pos_in += ret;
+        pos_out += ret;
+
+        if (off_in)
+            *off_in = pos_in;
+        if (off_out)
+            *off_out = pos_out;
+
+        if (statbuf)
+            glfs_iatt_to_stat(glfd_in->fs, &iattbuf, statbuf);
+        if (prestat)
+            glfs_iatt_to_stat(glfd_in->fs, &preiatt, prestat);
+        if (poststat)
+            glfs_iatt_to_stat(glfd_in->fs, &postiatt, poststat);
+    }
+
+    if (ret <= 0)
+        goto out;
+
+    /*
+     * If *off_in is NULL, then there is no offset info that can
+     * obtained from the input argument. Hence follow below method.
+     *  If *off_in is NULL, then
+     *     glfd->offset = offset + ret;
+     * else
+     *     do nothing.
+     *
+     * According to the man page of copy_file_range, if off_in is
+     * NULL, then the offset of the source file is advanced by
+     * the return value of the fop. The same applies to off_out as
+     * well. Otherwise, if *off_in is not NULL, then the offset
+     * is not advanced by the filesystem. The entity which sends
+     * the copy_file_range call is supposed to advance the offset
+     * value in its buffer (pointed to by *off_in or *off_out)
+     * by the return value of copy_file_range.
+     */
+    if (!off_in)
+        glfd_in->offset += ret;
+
+    if (!off_out)
+        glfd_out->offset += ret;
+
+out:
+    if (fd_in)
+        fd_unref(fd_in);
+    if (fd_out)
+        fd_unref(fd_out);
+    if (glfd_in)
+        GF_REF_PUT(glfd_in);
+    if (glfd_out)
+        GF_REF_PUT(glfd_out);
+    if (fop_attr)
+        dict_unref(fop_attr);
+
+    glfs_subvol_done(glfd_in->fs, subvol);
+
+    __GLFS_EXIT_FS;
+
+invalid_fs:
+    return ret;
+}
+
+GFAPI_SYMVER_PUBLIC_DEFAULT(glfs_copy_file_range, future);
 
 ssize_t
 pub_glfs_pwritev(struct glfs_fd *glfd, const struct iovec *iovec, int iovcnt,
@@ -5154,9 +5314,7 @@ glfs_recall_lease_fd(struct glfs *fs, struct gf_upcall *up_data)
     inode_t *inode = NULL;
     struct glfs_fd *glfd = NULL;
     struct glfs_fd *tmp = NULL;
-    struct list_head glfd_list = {
-        0,
-    };
+    struct list_head glfd_list;
     fd_t *fd = NULL;
     uint64_t value = 0;
     struct glfs_lease lease = {
@@ -5205,22 +5363,24 @@ glfs_recall_lease_fd(struct glfs *fs, struct gf_upcall *up_data)
     }
     UNLOCK(&inode->lock);
 
-    list_for_each_entry_safe(glfd, tmp, &glfd_list, list)
-    {
-        LOCK(&glfd->lock);
+    if (!list_empty(&glfd_list)) {
+        list_for_each_entry_safe(glfd, tmp, &glfd_list, list)
         {
-            if (glfd->state != GLFD_CLOSE) {
-                gf_msg_trace(THIS->name, 0,
-                             "glfd (%p) has held lease, "
-                             "calling recall cbk",
-                             glfd);
-                glfd->cbk(lease, glfd->cookie);
+            LOCK(&glfd->lock);
+            {
+                if (glfd->state != GLFD_CLOSE) {
+                    gf_msg_trace(THIS->name, 0,
+                                 "glfd (%p) has held lease, "
+                                 "calling recall cbk",
+                                 glfd);
+                    glfd->cbk(lease, glfd->cookie);
+                }
             }
-        }
-        UNLOCK(&glfd->lock);
+            UNLOCK(&glfd->lock);
 
-        list_del_init(&glfd->list);
-        GF_REF_PUT(glfd);
+            list_del_init(&glfd->list);
+            GF_REF_PUT(glfd);
+        }
     }
 
 out:
@@ -5294,19 +5454,17 @@ out:
     return ret;
 }
 
-static void
-glfs_cbk_upcall_data(struct glfs *fs, struct gf_upcall *upcall_data)
+static int
+glfs_cbk_upcall_syncop(void *opaque)
 {
+    struct upcall_syncop_args *args = opaque;
     int ret = -1;
     struct glfs_upcall *up_arg = NULL;
+    struct glfs *fs;
+    struct gf_upcall *upcall_data;
 
-    if (!fs || !upcall_data)
-        goto out;
-
-    if (!(fs->upcall_events & upcall_data->event_type)) {
-        /* ignore events which application hasn't registered*/
-        goto out;
-    }
+    fs = args->fs;
+    upcall_data = args->upcall_data;
 
     up_arg = GLFS_CALLOC(1, sizeof(struct gf_upcall), glfs_release_upcall,
                          glfs_mt_upcall_entry_t);
@@ -5353,6 +5511,38 @@ out:
         GLFS_FREE(up_arg);
     }
 
+    return ret;
+}
+
+static void
+glfs_cbk_upcall_data(struct glfs *fs, struct gf_upcall *upcall_data)
+{
+    struct upcall_syncop_args args = {
+        0,
+    };
+    int ret = -1;
+
+    if (!fs || !upcall_data)
+        goto out;
+
+    if (!(fs->upcall_events & upcall_data->event_type)) {
+        /* ignore events which application hasn't registered*/
+        goto out;
+    }
+
+    args.fs = fs;
+    args.upcall_data = upcall_data;
+
+    ret = synctask_new(THIS->ctx->env, glfs_cbk_upcall_syncop, NULL, NULL,
+                       &args);
+    /* should we retry incase of failure? */
+    if (ret) {
+        gf_msg(THIS->name, GF_LOG_ERROR, errno, API_MSG_UPCALL_SYNCOP_FAILED,
+               "Synctak for Upcall event_type(%d) and gfid(%s) failed",
+               upcall_data->event_type, (char *)(upcall_data->gfid));
+    }
+
+out:
     return;
 }
 

@@ -24,7 +24,7 @@
 #define REBAL_ESTIMATE_START_TIME 600
 
 #include "cli.h"
-#include "compat-errno.h"
+#include <glusterfs/compat-errno.h>
 #include "cli-cmd.h"
 #include <sys/uio.h>
 #include <stdlib.h>
@@ -33,18 +33,18 @@
 #include "xdr-generic.h"
 #include "protocol-common.h"
 #include "cli-mem-types.h"
-#include "compat.h"
-#include "upcall-utils.h"
+#include <glusterfs/compat.h>
+#include <glusterfs/upcall-utils.h>
 
-#include "syscall.h"
+#include <glusterfs/syscall.h>
 #include "glusterfs3.h"
 #include "portmap-xdr.h"
-#include "byte-order.h"
+#include <glusterfs/byte-order.h>
 
 #include "cli-quotad-client.h"
-#include "run.h"
-#include "quota-common-utils.h"
-#include "events.h"
+#include <glusterfs/run.h>
+#include <glusterfs/quota-common-utils.h>
+#include <glusterfs/events.h>
 
 enum gf_task_types { GF_TASK_TYPE_REBALANCE, GF_TASK_TYPE_REMOVE_BRICK };
 
@@ -1178,6 +1178,9 @@ gf_cli_create_volume_cbk(struct rpc_req *req, struct iovec *iov, int count,
 out:
     cli_cmd_broadcast_response(ret);
     gf_free_xdr_cli_rsp(rsp);
+
+    if (rsp_dict)
+        dict_unref(rsp_dict);
     return ret;
 }
 
@@ -1251,6 +1254,9 @@ gf_cli_delete_volume_cbk(struct rpc_req *req, struct iovec *iov, int count,
 out:
     cli_cmd_broadcast_response(ret);
     gf_free_xdr_cli_rsp(rsp);
+
+    if (rsp_dict)
+        dict_unref(rsp_dict);
     gf_log("", GF_LOG_DEBUG, "Returning with %d", ret);
     return ret;
 }
@@ -1335,6 +1341,9 @@ out:
     cli_cmd_broadcast_response(ret);
     cli_local_wipe(local);
     gf_free_xdr_cli_rsp(rsp);
+
+    if (dict)
+        dict_unref(dict);
 
     gf_log("", GF_LOG_DEBUG, "Returning with %d", ret);
     return ret;
@@ -1468,6 +1477,9 @@ gf_cli_start_volume_cbk(struct rpc_req *req, struct iovec *iov, int count,
 out:
     cli_cmd_broadcast_response(ret);
     gf_free_xdr_cli_rsp(rsp);
+
+    if (rsp_dict)
+        dict_unref(rsp_dict);
     return ret;
 }
 
@@ -1542,6 +1554,9 @@ gf_cli_stop_volume_cbk(struct rpc_req *req, struct iovec *iov, int count,
 out:
     cli_cmd_broadcast_response(ret);
     gf_free_xdr_cli_rsp(rsp);
+
+    if (rsp_dict)
+        dict_unref(rsp_dict);
 
     return ret;
 }
@@ -2599,6 +2614,9 @@ gf_cli_remove_tier_brick_cbk(struct rpc_req *req, struct iovec *iov, int count,
 out:
     cli_cmd_broadcast_response(ret);
     gf_free_xdr_cli_rsp(rsp);
+
+    if (rsp_dict)
+        dict_unref(rsp_dict);
     return ret;
 }
 
@@ -3041,6 +3059,9 @@ gf_cli_remove_brick_cbk(struct rpc_req *req, struct iovec *iov, int count,
 out:
     cli_cmd_broadcast_response(ret);
     gf_free_xdr_cli_rsp(rsp);
+
+    if (rsp_dict)
+        dict_unref(rsp_dict);
 
     return ret;
 }
@@ -4053,6 +4074,7 @@ out:
         cli_cmd_broadcast_response(ret);
     }
     gf_free_xdr_cli_rsp(rsp);
+
     return ret;
 }
 
@@ -4086,6 +4108,7 @@ cli_quotad_getlimit(call_frame_t *frame, xlator_t *this, void *data)
                          cli_quotad_getlimit_cbk, (xdrproc_t)xdr_gf_cli_req);
 
 out:
+    GF_FREE(req.dict.dict_val);
     gf_log("cli", GF_LOG_DEBUG, "Returning %d", ret);
     return ret;
 }
@@ -4824,6 +4847,7 @@ gf_cli_rename_volume(call_frame_t *frame, xlator_t *this, void *data)
                          gf_cli_rename_volume_cbk, (xdrproc_t)xdr_gf_cli_req);
 
 out:
+    GF_FREE(req.dict.dict_val);
     gf_log("cli", GF_LOG_DEBUG, "Returning %d", ret);
 
     return ret;
@@ -5398,6 +5422,7 @@ out:
     if (op_dict) {
         dict_unref(op_dict);
     }
+    GF_FREE(req.xdata.xdata_val);
     gf_log("cli", GF_LOG_DEBUG, "Returning %d", ret);
 
     return ret;
@@ -8457,6 +8482,9 @@ gf_cli_status_cbk(struct rpc_req *req, struct iovec *iov, int count,
         } else {
             cli_print_brick_status(&status);
         }
+
+        /* Allocatated memory using gf_asprintf*/
+        GF_FREE(status.pid_str);
     }
     cli_out(" ");
 
@@ -8683,6 +8711,7 @@ gf_cli_mount(call_frame_t *frame, xlator_t *this, void *data)
                          (xdrproc_t)xdr_gf1_cli_mount_req);
 
 out:
+    GF_FREE(req.dict.dict_val);
     gf_log("cli", GF_LOG_DEBUG, "Returning %d", ret);
     return ret;
 }
@@ -9338,6 +9367,9 @@ gf_cli_list_volume_cbk(struct rpc_req *req, struct iovec *iov, int count,
 out:
     cli_cmd_broadcast_response(ret);
     gf_free_xdr_cli_rsp(rsp);
+
+    if (dict)
+        dict_unref(dict);
     return ret;
 }
 

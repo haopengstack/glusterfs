@@ -12,11 +12,11 @@
 
 #include "rpc-clnt.h"
 #include "rpc-clnt-ping.h"
-#include "byte-order.h"
+#include <glusterfs/byte-order.h>
 #include "xdr-rpcclnt.h"
 #include "rpc-transport.h"
 #include "protocol-common.h"
-#include "mem-pool.h"
+#include <glusterfs/mem-pool.h>
 #include "xdr-rpc.h"
 #include "rpc-common-xdr.h"
 
@@ -967,6 +967,12 @@ rpc_clnt_notify(rpc_transport_t *trans, void *mydata,
             /* only meaningful on a server, no need of handling this event
              * in a client.
              */
+            ret = 0;
+            break;
+
+        case RPC_TRANSPORT_EVENT_THREAD_DIED:
+            /* only meaningful on a server, no need of handling this event on a
+             * client */
             ret = 0;
             break;
     }

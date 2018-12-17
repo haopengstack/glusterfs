@@ -10,10 +10,10 @@
 
 #include <math.h>
 #include "quick-read.h"
-#include "statedump.h"
+#include <glusterfs/statedump.h>
 #include "quick-read-messages.h"
-#include "upcall-utils.h"
-#include "atomic.h"
+#include <glusterfs/upcall-utils.h>
+#include <glusterfs/atomic.h>
 
 typedef struct qr_local {
     inode_t *inode;
@@ -1581,6 +1581,14 @@ struct xlator_dumpops qr_dumpops = {
 };
 
 struct volume_options qr_options[] = {
+    {
+        .key = {"quick-read"},
+        .type = GF_OPTION_TYPE_BOOL,
+        .default_value = "off",
+        .description = "enable/disable quick-read",
+        .op_version = {GD_OP_VERSION_6_0},
+        .flags = OPT_FLAG_SETTABLE,
+    },
     {.key = {"priority"}, .type = GF_OPTION_TYPE_ANY},
     {.key = {"cache-size"},
      .type = GF_OPTION_TYPE_SIZET,

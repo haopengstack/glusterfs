@@ -9,12 +9,12 @@
 */
 
 #include "open-behind-mem-types.h"
-#include "xlator.h"
-#include "statedump.h"
-#include "call-stub.h"
-#include "defaults.h"
+#include <glusterfs/xlator.h>
+#include <glusterfs/statedump.h>
+#include <glusterfs/call-stub.h>
+#include <glusterfs/defaults.h>
 #include "open-behind-messages.h"
-#include "glusterfs-acl.h"
+#include <glusterfs/glusterfs-acl.h>
 
 typedef struct ob_conf {
     gf_boolean_t use_anonymous_fd; /* use anonymous FDs wherever safe
@@ -347,12 +347,14 @@ ob_inode_wake(xlator_t *this, struct list_head *ob_fds)
     ob_fd_t *ob_fd = NULL, *tmp = NULL;
     fd_t *fd = NULL;
 
-    list_for_each_entry_safe(ob_fd, tmp, ob_fds, ob_fds_on_inode)
-    {
-        ob_fd_wake(this, ob_fd->fd, ob_fd);
-        fd = ob_fd->fd;
-        ob_fd_free(ob_fd);
-        fd_unref(fd);
+    if (!list_empty(ob_fds)) {
+        list_for_each_entry_safe(ob_fd, tmp, ob_fds, ob_fds_on_inode)
+        {
+            ob_fd_wake(this, ob_fd->fd, ob_fd);
+            fd = ob_fd->fd;
+            ob_fd_free(ob_fd);
+            fd_unref(fd);
+        }
     }
 }
 
@@ -381,9 +383,7 @@ open_all_pending_fds_and_resume(xlator_t *this, inode_t *inode,
     ob_fd_t *ob_fd = NULL, *tmp = NULL;
     gf_boolean_t was_open_in_progress = _gf_false;
     gf_boolean_t wait_for_open = _gf_false;
-    struct list_head ob_fds = {
-        0,
-    };
+    struct list_head ob_fds;
 
     ob_inode = ob_inode_get(this, inode);
     if (ob_inode == NULL)
@@ -1306,6 +1306,14 @@ struct xlator_dumpops dumpops = {
 
 struct volume_options options[] = {
     {
+        .key = {"open-behind"},
+        .type = GF_OPTION_TYPE_BOOL,
+        .default_value = "off",
+        .description = "enable/disable open-behind",
+        .op_version = {GD_OP_VERSION_6_0},
+        .flags = OPT_FLAG_SETTABLE,
+    },
+    {
         .key = {"use-anonymous-fd"},
         .type = GF_OPTION_TYPE_BOOL,
         .default_value = "no",
@@ -1348,4 +1356,18 @@ struct volume_options options[] = {
      .description = "Enable/Disable open behind translator"},
     {.key = {NULL}}
 
+};
+
+xlator_api_t xlator_api = {
+    .init = init,
+    .fini = fini,
+    .reconfigure = reconfigure,
+    .mem_acct_init = mem_acct_init,
+    .op_version = {1}, /* Present from the initial version */
+    .dumpops = &dumpops,
+    .fops = &fops,
+    .cbks = &cbks,
+    .options = options,
+    .identifier = "open-behind",
+    .category = GF_MAINTAINED,
 };

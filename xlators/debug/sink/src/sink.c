@@ -8,8 +8,8 @@
    cases as published by the Free Software Foundation.
 */
 
-#include "xlator.h"
-#include "defaults.h"
+#include <glusterfs/xlator.h>
+#include <glusterfs/defaults.h>
 
 int32_t
 init(xlator_t *this)
@@ -79,4 +79,16 @@ struct xlator_cbks cbks = {};
 
 struct volume_options options[] = {
     {.key = {NULL}},
+};
+
+xlator_api_t xlator_api = {
+    .init = init,
+    .fini = fini,
+    .notify = notify,
+    .op_version = {GD_OP_VERSION_3_12_0},
+    .fops = &fops,
+    .cbks = &cbks,
+    .options = options,
+    .identifier = "sink",
+    .category = GF_TECH_PREVIEW,
 };

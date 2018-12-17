@@ -12,11 +12,11 @@
 #define _RPCSVC_COMMON_H
 
 #include <pthread.h>
-#include "list.h"
-#include "compat.h"
-#include "glusterfs.h"
-#include "dict.h"
-#include "xlator.h"
+#include <glusterfs/list.h>
+#include <glusterfs/compat.h>
+#include <glusterfs/glusterfs.h>
+#include <glusterfs/dict.h>
+#include <glusterfs/xlator.h>
 
 typedef enum {
     RPCSVC_EVENT_ACCEPT,
@@ -50,10 +50,6 @@ typedef struct rpcsvc_state {
     /* Reference to the options */
     dict_t *options;
 
-    /* Allow insecure ports. */
-    gf_boolean_t allow_insecure;
-    gf_boolean_t register_portmap;
-    gf_boolean_t root_squash;
     uid_t anonuid;
     gid_t anongid;
     glusterfs_ctx_t *ctx;
@@ -79,6 +75,11 @@ typedef struct rpcsvc_state {
     gf_boolean_t addr_namelookup;
     /* determine whether throttling is needed, by default OFF */
     gf_boolean_t throttle;
+    /* Allow insecure ports. */
+    gf_boolean_t allow_insecure;
+    gf_boolean_t register_portmap;
+    gf_boolean_t root_squash;
+    gf_boolean_t all_squash;
 } rpcsvc_t;
 
 /* DRC START */

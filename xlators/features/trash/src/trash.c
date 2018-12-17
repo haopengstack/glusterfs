@@ -9,7 +9,7 @@
 */
 #include "trash.h"
 #include "trash-mem-types.h"
-#include "syscall.h"
+#include <glusterfs/syscall.h>
 
 #define root_gfid                                                              \
     (uuid_t) { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1 }
@@ -2635,4 +2635,18 @@ struct volume_options options[] = {
      .type = GF_OPTION_TYPE_PATH,
      .default_value = "{{ brick.path }}"},
     {.key = {NULL}},
+};
+
+xlator_api_t xlator_api = {
+    .init = init,
+    .fini = fini,
+    .notify = notify,
+    .reconfigure = reconfigure,
+    .mem_acct_init = mem_acct_init,
+    .op_version = {1}, /* Present from the initial version */
+    .fops = &fops,
+    .cbks = &cbks,
+    .options = options,
+    .identifier = "trash",
+    .category = GF_TECH_PREVIEW,
 };

@@ -11,17 +11,18 @@
 #ifndef __AFR_H__
 #define __AFR_H__
 
-#include "call-stub.h"
-#include "compat-errno.h"
+#include <glusterfs/call-stub.h>
+#include <glusterfs/compat-errno.h>
 #include "afr-mem-types.h"
 
 #include "libxlator.h"
-#include "timer.h"
-#include "syncop.h"
+#include <glusterfs/timer.h>
+#include <glusterfs/syncop.h>
 
 #include "afr-self-heald.h"
 #include "afr-messages.h"
 
+#define SHD_INODE_LRU_LIMIT 1
 #define AFR_PATHINFO_HEADER "REPLICATE:"
 #define AFR_SH_READDIR_SIZE_KEY "self-heal-readdir-size"
 #define AFR_SH_DATA_DOMAIN_FMT "%s:self-heal"

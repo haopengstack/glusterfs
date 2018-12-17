@@ -8,8 +8,8 @@
   cases as published by the Free Software Foundation.
 */
 
-#include "dict.h"
-#include "xlator.h"
+#include <glusterfs/dict.h>
+#include <glusterfs/xlator.h>
 #include "rpc-common-xdr.h"
 #include "glusterfs3-xdr.h"
 #include "glusterfs4-xdr.h"
@@ -2547,6 +2547,38 @@ client_pre_writev_v2(xlator_t *this, gfx_write_req *req, fd_t *fd, size_t size,
     ret = dict_set_str(*xdata, "testing-the-xdata-key",
                        "testing-the-xdata-value");
 #endif
+
+    dict_to_xdr(*xdata, &req->xdata);
+
+    return 0;
+out:
+    return -op_errno;
+}
+
+int
+client_pre_copy_file_range_v2(xlator_t *this, gfx_copy_file_range_req *req,
+                              fd_t *fd_in, off64_t off_in, fd_t *fd_out,
+                              off64_t off_out, size_t size, int32_t flags,
+                              dict_t **xdata)
+{
+    int64_t remote_fd_in = -1;
+    int64_t remote_fd_out = -1;
+    int op_errno = ESTALE;
+
+    CLIENT_GET_REMOTE_FD(this, fd_in, FALLBACK_TO_ANON_FD, remote_fd_in,
+                         op_errno, out);
+
+    CLIENT_GET_REMOTE_FD(this, fd_out, FALLBACK_TO_ANON_FD, remote_fd_out,
+                         op_errno, out);
+    req->size = size;
+    req->off_in = off_in;
+    req->off_out = off_out;
+    req->fd_in = remote_fd_in;
+    req->fd_out = remote_fd_out;
+    req->flag = flags;
+
+    memcpy(req->gfid1, fd_in->inode->gfid, 16);
+    memcpy(req->gfid2, fd_out->inode->gfid, 16);
 
     dict_to_xdr(*xdata, &req->xdata);
 

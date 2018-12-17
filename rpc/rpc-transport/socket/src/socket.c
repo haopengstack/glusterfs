@@ -10,16 +10,16 @@
 
 #include "socket.h"
 #include "name.h"
-#include "dict.h"
+#include <glusterfs/dict.h>
 #include "rpc-transport.h"
-#include "logging.h"
-#include "xlator.h"
-#include "syscall.h"
-#include "byte-order.h"
-#include "common-utils.h"
-#include "compat-errno.h"
+#include <glusterfs/logging.h>
+#include <glusterfs/xlator.h>
+#include <glusterfs/syscall.h>
+#include <glusterfs/byte-order.h>
+#include <glusterfs/common-utils.h>
+#include <glusterfs/compat-errno.h>
 #include "socket-mem-types.h"
-#include "timer.h"
+#include <glusterfs/timer.h>
 
 /* ugly #includes below */
 #include "protocol-common.h"
@@ -687,10 +687,10 @@ __socket_rwv(rpc_transport_t *this, struct iovec *vector, int count,
         } else {
             ret = __socket_cached_read(this, opvector, opcount);
             if (ret == 0) {
-                gf_log(this->name, GF_LOG_INFO,
-                       "EOF on socket %d "
-                       "(errno:%d:%s); returning ENODATA",
+                gf_log(this->name, GF_LOG_DEBUG,
+                       "EOF on socket %d (errno:%d:%s); returning ENODATA",
                        sock, errno, strerror(errno));
+
                 errno = ENODATA;
                 ret = -1;
             }
@@ -1744,9 +1744,9 @@ __socket_read_accepted_successful_reply(rpc_transport_t *this)
 
             free(read_rsp.xdata.xdata_val);
 
-            /* need to round off to proper roof (%4), as XDR packing pads
+            /* need to round off to proper gf_roof (%4), as XDR packing pads
                the end of opaque object with '0' */
-            size = roof(read_rsp.xdata.xdata_len, 4);
+            size = gf_roof(read_rsp.xdata.xdata_len, 4);
 
             if (!size) {
                 frag->call_body.reply
@@ -1874,9 +1874,9 @@ __socket_read_accepted_successful_reply_v2(rpc_transport_t *this)
 
             free(read_rsp.xdata.pairs.pairs_val);
 
-            /* need to round off to proper roof (%4), as XDR packing pads
+            /* need to round off to proper gf_roof (%4), as XDR packing pads
                the end of opaque object with '0' */
-            size = roof(read_rsp.xdata.xdr_size, 4);
+            size = gf_roof(read_rsp.xdata.xdr_size, 4);
 
             if (!size) {
                 frag->call_body.reply
@@ -2859,7 +2859,7 @@ socket_complete_connection(rpc_transport_t *this)
 /* reads rpc_requests during pollin */
 static int
 socket_event_handler(int fd, int idx, int gen, void *data, int poll_in,
-                     int poll_out, int poll_err)
+                     int poll_out, int poll_err, char event_thread_died)
 {
     rpc_transport_t *this = NULL;
     socket_private_t *priv = NULL;
@@ -2868,6 +2868,11 @@ socket_event_handler(int fd, int idx, int gen, void *data, int poll_in,
     gf_boolean_t socket_closed = _gf_false, notify_handled = _gf_false;
 
     this = data;
+
+    if (event_thread_died) {
+        /* to avoid duplicate notifications, notify only for listener sockets */
+        return 0;
+    }
 
     GF_VALIDATE_OR_GOTO("socket", this, out);
     GF_VALIDATE_OR_GOTO("socket", this->private, out);
@@ -2967,7 +2972,7 @@ out:
 
 static int
 socket_server_event_handler(int fd, int idx, int gen, void *data, int poll_in,
-                            int poll_out, int poll_err)
+                            int poll_out, int poll_err, char event_thread_died)
 {
     rpc_transport_t *this = NULL;
     socket_private_t *priv = NULL;
@@ -2991,6 +2996,12 @@ socket_server_event_handler(int fd, int idx, int gen, void *data, int poll_in,
     priv = this->private;
     ctx = this->ctx;
 
+    if (event_thread_died) {
+        rpc_transport_notify(this, RPC_TRANSPORT_EVENT_THREAD_DIED,
+                             (void *)(unsigned long)gen);
+        return 0;
+    }
+
     /* NOTE:
      * We have done away with the critical section in this function. since
      * there's little that it helps with. There's no other code that
@@ -2998,6 +3009,12 @@ socket_server_event_handler(int fd, int idx, int gen, void *data, int poll_in,
      * thread context while we are using it here.
      */
     priv->idx = idx;
+    priv->gen = gen;
+
+    if (poll_err) {
+        socket_event_poll_err(this, gen, idx);
+        goto out;
+    }
 
     if (poll_in) {
         int aflags = 0;
@@ -3099,6 +3116,7 @@ socket_server_event_handler(int fd, int idx, int gen, void *data, int poll_in,
         new_trans->mydata = this->mydata;
         new_trans->notify = this->notify;
         new_trans->listener = this;
+        new_trans->notify_poller_death = this->poller_death_accept;
         new_priv = new_trans->private;
 
         if (new_sockaddr.ss_family == AF_UNIX) {
@@ -3149,9 +3167,9 @@ socket_server_event_handler(int fd, int idx, int gen, void *data, int poll_in,
             ret = rpc_transport_notify(this, RPC_TRANSPORT_ACCEPT, new_trans);
 
             if (ret != -1) {
-                new_priv->idx = event_register(ctx->event_pool, new_sock,
-                                               socket_event_handler, new_trans,
-                                               1, 0);
+                new_priv->idx = event_register(
+                    ctx->event_pool, new_sock, socket_event_handler, new_trans,
+                    1, 0, new_trans->notify_poller_death);
                 if (new_priv->idx == -1) {
                     ret = -1;
                     gf_log(this->name, GF_LOG_ERROR,
@@ -3530,7 +3548,8 @@ socket_connect(rpc_transport_t *this, int port)
 
         this->listener = this;
         priv->idx = event_register(ctx->event_pool, priv->sock,
-                                   socket_event_handler, this, 1, 1);
+                                   socket_event_handler, this, 1, 1,
+                                   this->notify_poller_death);
         if (priv->idx == -1) {
             gf_log("", GF_LOG_WARNING,
                    "failed to register the event; "
@@ -3709,7 +3728,8 @@ socket_listen(rpc_transport_t *this)
         rpc_transport_ref(this);
 
         priv->idx = event_register(ctx->event_pool, priv->sock,
-                                   socket_server_event_handler, this, 1, 0);
+                                   socket_server_event_handler, this, 1, 0,
+                                   this->notify_poller_death);
 
         if (priv->idx == -1) {
             gf_log(this->name, GF_LOG_WARNING,
@@ -3928,7 +3948,7 @@ reconfigure(rpc_transport_t *this, dict_t *options)
     int ret = 0;
     uint32_t backlog = 0;
     uint64_t windowsize = 0;
-    uint32_t timeout = 42;
+    uint32_t timeout = GF_NETWORK_TIMEOUT;
     int keepaliveidle = GF_KEEPALIVE_TIME;
     int keepaliveintvl = GF_KEEPALIVE_INTERVAL;
     int keepalivecnt = GF_KEEPALIVE_COUNT;
@@ -4393,7 +4413,7 @@ socket_init(rpc_transport_t *this)
     gf_boolean_t tmp_bool = 0;
     uint64_t windowsize = GF_DEFAULT_SOCKET_WINDOW_SIZE;
     char *optstr = NULL;
-    uint32_t timeout = 42;
+    uint32_t timeout = GF_NETWORK_TIMEOUT;
     int keepaliveidle = GF_KEEPALIVE_TIME;
     int keepaliveintvl = GF_KEEPALIVE_INTERVAL;
     int keepalivecnt = GF_KEEPALIVE_COUNT;
@@ -4661,7 +4681,7 @@ struct volume_options options[] = {
     {.key = {"transport.tcp-user-timeout"},
      .type = GF_OPTION_TYPE_INT,
      .op_version = {GD_OP_VERSION_3_10_2},
-     .default_value = "42"},
+     .default_value = TOSTRING(GF_NETWORK_TIMEOUT)},
     {.key = {"transport.socket.nodelay"},
      .type = GF_OPTION_TYPE_BOOL,
      .default_value = "1"},

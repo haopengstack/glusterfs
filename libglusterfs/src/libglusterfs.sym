@@ -92,6 +92,8 @@ args_xattrop_cbk_store
 args_xattrop_store
 args_zerofill_cbk_store
 args_zerofill_store
+args_copy_file_range_cbk_store
+args_copy_file_range_store
 bin_to_data
 call_resume
 call_resume_keep_stub
@@ -351,6 +353,10 @@ default_put
 default_put_cbk
 default_put_failure_cbk
 default_put_resume
+default_copy_file_range
+default_copy_file_range_cbk
+default_copy_file_range_failure_cbk
+default_copy_file_range_resume
 __dentry_grep
 dht_is_linkfile
 dict_add
@@ -471,6 +477,8 @@ fd_unref
 _fini
 fop_access_stub
 fop_create_stub
+fop_copy_file_range_stub
+fop_copy_file_range_cbk_stub
 fop_discard_stub
 fop_entrylk_stub
 fop_enum_to_pri_string
@@ -783,6 +791,7 @@ __inode_find
 inode_find
 inode_find_directory_name
 inode_forget
+inode_forget_with_unref
 inode_from_path
 inode_grep
 inode_grep_for_gfid
@@ -807,6 +816,7 @@ inode_table_destroy_all
 inode_table_dump
 inode_table_dump_to_dict
 inode_table_new
+inode_table_with_invalidator
 __inode_table_set_lru_limit
 inode_table_set_lru_limit
 inode_unlink
@@ -933,6 +943,7 @@ synclock_unlock
 syncop_access
 syncop_close
 syncop_create
+syncop_copy_file_range
 syncopctx_getctx
 syncopctx_setfsgid
 syncopctx_setfsgroups
@@ -1006,6 +1017,7 @@ sys_chmod
 sys_chown
 sys_close
 sys_closedir
+sys_copy_file_range
 sys_creat
 sys_fallocate
 sys_fchmod
@@ -1121,6 +1133,7 @@ xlator_volume_option_get
 xlator_volume_option_get_list
 xlator_memrec_free
 xlator_mem_cleanup
+gluster_graph_take_reference
 default_fops
 gf_fop_list
 gf_upcall_list

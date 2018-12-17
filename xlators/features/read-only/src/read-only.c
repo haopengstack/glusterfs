@@ -7,7 +7,7 @@
    later), or the GNU General Public License, version 2 (GPLv2), in all
    cases as published by the Free Software Foundation.
 */
-#include "defaults.h"
+#include <glusterfs/defaults.h>
 #include "read-only-common.h"
 #include "read-only-mem-types.h"
 #include "read-only.h"
@@ -129,4 +129,17 @@ struct volume_options options[] = {
      .description = "When \"on\", makes a volume read-only. It is turned "
                     "\"off\" by default."},
     {.key = {NULL}},
+};
+
+xlator_api_t xlator_api = {
+    .init = init,
+    .fini = fini,
+    .reconfigure = reconfigure,
+    .mem_acct_init = mem_acct_init,
+    .op_version = {1}, /* Present from the initial version */
+    .fops = &fops,
+    .cbks = &cbks,
+    .options = options,
+    .identifier = "read-only",
+    .category = GF_TECH_PREVIEW,
 };

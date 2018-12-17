@@ -12,8 +12,8 @@
 
 #include <limits.h>
 #include <sys/types.h>
-#include "xlator.h"
-#include "gf-dirent.h"
+#include <glusterfs/xlator.h>
+#include <glusterfs/gf-dirent.h>
 #include "posix.h"
 
 /* From Open Group Base Specifications Issue 6 */
@@ -91,8 +91,10 @@
                        (loc)->path);                                           \
             }                                                                  \
             break;                                                             \
+        } /* __ret == -1 && errno == ELOOP */                                  \
+        else {                                                                 \
+            op_ret = -1;                                                       \
         }                                                                      \
-        /* __ret == -1 && errno == ELOOP */                                    \
     } while (0)
 
 #define POSIX_ANCESTRY_PATH (1 << 0)

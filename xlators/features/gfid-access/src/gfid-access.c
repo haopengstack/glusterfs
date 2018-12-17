@@ -8,9 +8,9 @@
    cases as published by the Free Software Foundation.
 */
 #include "gfid-access.h"
-#include "inode.h"
-#include "byte-order.h"
-#include "statedump.h"
+#include <glusterfs/inode.h>
+#include <glusterfs/byte-order.h>
+#include <glusterfs/statedump.h>
 
 int
 ga_valid_inode_loc_copy(loc_t *dst, loc_t *src, xlator_t *this)
@@ -1407,4 +1407,16 @@ struct xlator_dumpops dumpops = {
 struct volume_options options[] = {
     /* This translator doesn't take any options, or provide any options */
     {.key = {NULL}},
+};
+
+xlator_api_t xlator_api = {
+    .init = init,
+    .fini = fini,
+    .mem_acct_init = mem_acct_init,
+    .op_version = {1},
+    .fops = &fops,
+    .cbks = &cbks,
+    .options = options,
+    .identifier = "gfid-access",
+    .category = GF_MAINTAINED,
 };

@@ -7,8 +7,8 @@
    later), or the GNU General Public License, version 2 (GPLv2), in all
    cases as published by the Free Software Foundation.
 */
-#include "xlator.h"
-#include "syscall.h"
+#include <glusterfs/xlator.h>
+#include <glusterfs/syscall.h>
 
 /**
  * xlators/debug/io_stats :
@@ -28,18 +28,18 @@
 
 #include <fnmatch.h>
 #include <errno.h>
-#include "glusterfs.h"
-#include "xlator.h"
+#include <glusterfs/glusterfs.h>
+#include <glusterfs/xlator.h>
 #include "io-stats-mem-types.h"
 #include <stdarg.h>
-#include "defaults.h"
-#include "logging.h"
+#include <glusterfs/defaults.h>
+#include <glusterfs/logging.h>
 #include "cli1-xdr.h"
-#include "statedump.h"
-#include "syncop.h"
+#include <glusterfs/statedump.h>
+#include <glusterfs/syncop.h>
 #include <pwd.h>
 #include <grp.h>
-#include "upcall-utils.h"
+#include <glusterfs/upcall-utils.h>
 
 #define MAX_LIST_MEMBERS 100
 #define DEFAULT_PWD_BUF_SZ 16384
@@ -824,19 +824,18 @@ io_stats_dump_global_to_json_logfp(xlator_t *this,
         }
 
         if (interval == -1) {
-            ios_log(this, logfp, "\"%s.%s.read_%d%s\": \"%" GF_PRI_ATOMIC "\",",
+            ios_log(this, logfp, "\"%s.%s.read_%d%s\": %" GF_PRI_ATOMIC ",",
                     key_prefix, str_prefix, rw_size, rw_unit,
                     GF_ATOMIC_GET(stats->block_count_read[i]));
-            ios_log(this, logfp,
-                    "\"%s.%s.write_%d%s\": \"%" GF_PRI_ATOMIC "\",", key_prefix,
-                    str_prefix, rw_size, rw_unit,
+            ios_log(this, logfp, "\"%s.%s.write_%d%s\": %" GF_PRI_ATOMIC ",",
+                    key_prefix, str_prefix, rw_size, rw_unit,
                     GF_ATOMIC_GET(stats->block_count_write[i]));
         } else {
-            ios_log(this, logfp, "\"%s.%s.read_%d%s_per_sec\": \"%0.2lf\",",
+            ios_log(this, logfp, "\"%s.%s.read_%d%s_per_sec\": %0.2lf,",
                     key_prefix, str_prefix, rw_size, rw_unit,
                     (double)(GF_ATOMIC_GET(stats->block_count_read[i]) /
                              interval_sec));
-            ios_log(this, logfp, "\"%s.%s.write_%d%s_per_sec\": \"%0.2lf\",",
+            ios_log(this, logfp, "\"%s.%s.write_%d%s_per_sec\": %0.2lf,",
                     key_prefix, str_prefix, rw_size, rw_unit,
                     (double)(GF_ATOMIC_GET(stats->block_count_write[i]) /
                              interval_sec));
@@ -844,9 +843,9 @@ io_stats_dump_global_to_json_logfp(xlator_t *this,
     }
 
     if (interval == -1) {
-        ios_log(this, logfp, "\"%s.%s.fds.open_count\": \"%" PRId64 "\",",
+        ios_log(this, logfp, "\"%s.%s.fds.open_count\": %" PRId64 ",",
                 key_prefix, str_prefix, conf->cumulative.nr_opens);
-        ios_log(this, logfp, "\"%s.%s.fds.max_open_count\": \"%" PRId64 "\",",
+        ios_log(this, logfp, "\"%s.%s.fds.max_open_count\": %" PRId64 ",",
                 key_prefix, str_prefix, conf->cumulative.max_nr_opens);
     }
 
@@ -868,20 +867,19 @@ io_stats_dump_global_to_json_logfp(xlator_t *this,
             }
         }
         if (interval == -1) {
-            ios_log(this, logfp,
-                    "\"%s.%s.fop.%s.count\": \"%" GF_PRI_ATOMIC "\",",
+            ios_log(this, logfp, "\"%s.%s.fop.%s.count\": %" GF_PRI_ATOMIC ",",
                     key_prefix, str_prefix, lc_fop_name, fop_hits);
         } else {
-            ios_log(this, logfp, "\"%s.%s.fop.%s.per_sec\": \"%0.2lf\",",
+            ios_log(this, logfp, "\"%s.%s.fop.%s.per_sec\": %0.2lf,",
                     key_prefix, str_prefix, lc_fop_name,
                     (double)(fop_hits / interval_sec));
         }
 
-        ios_log(this, logfp, "\"%s.%s.fop.%s.latency_ave_usec\": \"%0.2lf\",",
+        ios_log(this, logfp, "\"%s.%s.fop.%s.latency_ave_usec\": %0.2lf,",
                 key_prefix, str_prefix, lc_fop_name, fop_lat_ave);
-        ios_log(this, logfp, "\"%s.%s.fop.%s.latency_min_usec\": \"%0.2lf\",",
+        ios_log(this, logfp, "\"%s.%s.fop.%s.latency_min_usec\": %0.2lf,",
                 key_prefix, str_prefix, lc_fop_name, fop_lat_min);
-        ios_log(this, logfp, "\"%s.%s.fop.%s.latency_max_usec\": \"%0.2lf\",",
+        ios_log(this, logfp, "\"%s.%s.fop.%s.latency_max_usec\": %0.2lf,",
                 key_prefix, str_prefix, lc_fop_name, fop_lat_max);
 
         fop_ave_usec_sum += fop_lat_ave;
@@ -896,18 +894,17 @@ io_stats_dump_global_to_json_logfp(xlator_t *this,
          */
         ios_log(this, logfp,
                 "\"%s.%s.fop.weighted_latency_ave_usec_nozerofill\": "
-                "\"%0.4lf\",",
+                "%0.4lf,",
                 key_prefix, str_prefix, weighted_fop_ave_usec);
     }
-    ios_log(this, logfp, "\"%s.%s.fop.weighted_latency_ave_usec\": \"%0.4lf\",",
+    ios_log(this, logfp, "\"%s.%s.fop.weighted_latency_ave_usec\": %0.4lf,",
             key_prefix, str_prefix, weighted_fop_ave_usec);
-    ios_log(this, logfp, "\"%s.%s.fop.weighted_fop_count\": \"%ld\",",
-            key_prefix, str_prefix, total_fop_hits);
+    ios_log(this, logfp, "\"%s.%s.fop.weighted_fop_count\": %ld,", key_prefix,
+            str_prefix, total_fop_hits);
 
     fop_ave_usec = fop_ave_usec_sum / GF_FOP_MAXVALUE;
-    ios_log(this, logfp,
-            "\"%s.%s.fop.unweighted_latency_ave_usec\":\"%0.4lf\",", key_prefix,
-            str_prefix, fop_ave_usec);
+    ios_log(this, logfp, "\"%s.%s.fop.unweighted_latency_ave_usec\":%0.4lf,",
+            key_prefix, str_prefix, fop_ave_usec);
 
     for (i = 0; i < GF_UPCALL_FLAGS_MAXVALUE; i++) {
         lc_fop_name = strdupa(gf_upcall_list[i]);
@@ -916,11 +913,10 @@ io_stats_dump_global_to_json_logfp(xlator_t *this,
         }
         fop_hits = GF_ATOMIC_GET(stats->upcall_hits[i]);
         if (interval == -1) {
-            ios_log(this, logfp,
-                    "\"%s.%s.fop.%s.count\": \"%" GF_PRI_ATOMIC "\",",
+            ios_log(this, logfp, "\"%s.%s.fop.%s.count\": %" GF_PRI_ATOMIC ",",
                     key_prefix, str_prefix, lc_fop_name, fop_hits);
         } else {
-            ios_log(this, logfp, "\"%s.%s.fop.%s.per_sec\": \"%0.2lf\",",
+            ios_log(this, logfp, "\"%s.%s.fop.%s.per_sec\": %0.2lf,",
                     key_prefix, str_prefix, lc_fop_name,
                     (double)(fop_hits / interval_sec));
         }
@@ -937,7 +933,7 @@ io_stats_dump_global_to_json_logfp(xlator_t *this,
 
         dict_foreach_inline(xattr, curr)
         {
-            ios_log(this, logfp, "\"%s.%s.%s.queue_size\": \"%d\",", key_prefix,
+            ios_log(this, logfp, "\"%s.%s.%s.queue_size\": %d,", key_prefix,
                     str_prefix, curr->key, data_to_int32(curr->value));
         }
 
@@ -950,23 +946,23 @@ io_stats_dump_global_to_json_logfp(xlator_t *this,
     }
 
     if (interval == -1) {
-        ios_log(this, logfp, "\"%s.%s.uptime\": \"%" PRId64 "\",", key_prefix,
+        ios_log(this, logfp, "\"%s.%s.uptime\": %" PRId64 ",", key_prefix,
                 str_prefix, (uint64_t)(now->tv_sec - stats->started_at.tv_sec));
         ios_log(this, logfp,
-                "\"%s.%s.bytes_read\": \""
-                "%" GF_PRI_ATOMIC "\",",
+                "\"%s.%s.bytes_read\": "
+                "%" GF_PRI_ATOMIC ",",
                 key_prefix, str_prefix, GF_ATOMIC_GET(stats->data_read));
         ios_log(this, logfp,
-                "\"%s.%s.bytes_written\": \""
-                "%" GF_PRI_ATOMIC "\"",
+                "\"%s.%s.bytes_written\": "
+                "%" GF_PRI_ATOMIC "",
                 key_prefix, str_prefix, GF_ATOMIC_GET(stats->data_written));
     } else {
-        ios_log(this, logfp, "\"%s.%s.sample_interval_sec\": \"%0.2lf\",",
+        ios_log(this, logfp, "\"%s.%s.sample_interval_sec\": %0.2lf,",
                 key_prefix, str_prefix, interval_sec);
-        ios_log(this, logfp, "\"%s.%s.bytes_read_per_sec\": \"%0.2lf\",",
+        ios_log(this, logfp, "\"%s.%s.bytes_read_per_sec\": %0.2lf,",
                 key_prefix, str_prefix,
                 (double)(GF_ATOMIC_GET(stats->data_read) / interval_sec));
-        ios_log(this, logfp, "\"%s.%s.bytes_written_per_sec\": \"%0.2lf\"",
+        ios_log(this, logfp, "\"%s.%s.bytes_written_per_sec\": %0.2lf",
                 key_prefix, str_prefix,
                 (double)(GF_ATOMIC_GET(stats->data_written) / interval_sec));
     }
@@ -2123,6 +2119,19 @@ io_stats_writev_cbk(call_frame_t *frame, void *cookie, xlator_t *this,
 }
 
 int
+io_stats_copy_file_range_cbk(call_frame_t *frame, void *cookie, xlator_t *this,
+                             int32_t op_ret, int32_t op_errno,
+                             struct iatt *stbuf, struct iatt *prebuf_dst,
+                             struct iatt *postbuf_dst, dict_t *xdata)
+{
+    UPDATE_PROFILE_STATS(frame, COPY_FILE_RANGE);
+
+    STACK_UNWIND_STRICT(copy_file_range, frame, op_ret, op_errno, stbuf,
+                        prebuf_dst, postbuf_dst, xdata);
+    return 0;
+}
+
+int
 io_stats_readdirp_cbk(call_frame_t *frame, void *cookie, xlator_t *this,
                       int32_t op_ret, int32_t op_errno, gf_dirent_t *buf,
                       dict_t *xdata)
@@ -2877,6 +2886,19 @@ io_stats_writev(call_frame_t *frame, xlator_t *this, fd_t *fd,
 }
 
 int
+io_stats_copy_file_range(call_frame_t *frame, xlator_t *this, fd_t *fd_in,
+                         off_t off_in, fd_t *fd_out, off_t off_out, size_t len,
+                         uint32_t flags, dict_t *xdata)
+{
+    START_FOP_LATENCY(frame);
+
+    STACK_WIND(frame, io_stats_copy_file_range_cbk, FIRST_CHILD(this),
+               FIRST_CHILD(this)->fops->copy_file_range, fd_in, off_in, fd_out,
+               off_out, len, flags, xdata);
+    return 0;
+}
+
+int
 io_stats_statfs(call_frame_t *frame, xlator_t *this, loc_t *loc, dict_t *xdata)
 {
     START_FOP_LATENCY(frame);
@@ -3450,12 +3472,13 @@ io_stats_release(xlator_t *this, fd_t *fd)
     BUMP_FOP(RELEASE);
 
     conf = this->private;
-
-    LOCK(&conf->lock);
-    {
-        conf->cumulative.nr_opens--;
+    if (conf) {
+        LOCK(&conf->lock);
+        {
+            conf->cumulative.nr_opens--;
+        }
+        UNLOCK(&conf->lock);
     }
-    UNLOCK(&conf->lock);
 
     ios_fd_ctx_get(fd, this, &iosfd);
     if (iosfd) {
@@ -4192,6 +4215,7 @@ struct xlator_fops fops = {
     .getactivelk = io_stats_getactivelk,
     .setactivelk = io_stats_setactivelk,
     .compound = io_stats_compound,
+    .copy_file_range = io_stats_copy_file_range,
 };
 
 struct xlator_cbks cbks = {
@@ -4408,4 +4432,19 @@ struct volume_options options[] = {
      .description = "Unique ID for our files."},
     {.key = {NULL}},
 
+};
+
+xlator_api_t xlator_api = {
+    .init = init,
+    .fini = fini,
+    .notify = notify,
+    .reconfigure = reconfigure,
+    .mem_acct_init = mem_acct_init,
+    .op_version = {1}, /* Present from the initial version */
+    .dumpops = &dumpops,
+    .fops = &fops,
+    .cbks = &cbks,
+    .options = options,
+    .identifier = "io-stats",
+    .category = GF_MAINTAINED,
 };

@@ -11,27 +11,37 @@
 #ifndef _RPCSVC_H
 #define _RPCSVC_H
 
-#include "gf-event.h"
+#include <glusterfs/gf-event.h>
 #include "rpc-transport.h"
-#include "logging.h"
-#include "dict.h"
-#include "mem-pool.h"
-#include "list.h"
-#include "iobuf.h"
+#include <glusterfs/logging.h>
+#include <glusterfs/dict.h>
+#include <glusterfs/mem-pool.h>
+#include <glusterfs/list.h>
+#include <glusterfs/iobuf.h>
 #include "xdr-rpc.h"
-#include "glusterfs.h"
-#include "xlator.h"
+#include <glusterfs/glusterfs.h>
+#include <glusterfs/xlator.h>
 #include "rpcsvc-common.h"
 
 #include <pthread.h>
 #include <sys/uio.h>
 #include <inttypes.h>
 #include <rpc/rpc_msg.h>
-#include "compat.h"
+#include <glusterfs/compat.h>
 
 #ifndef MAX_IOVEC
 #define MAX_IOVEC 16
 #endif
+
+/* TODO: we should store prognums at a centralized location to avoid conflict
+         or use a robust random number generator to avoid conflicts
+*/
+
+#define RPCSVC_INFRA_PROGRAM 7712846 /* random number */
+
+typedef enum {
+    RPCSVC_PROC_EVENT_THREAD_DEATH = 0,
+} rpcsvc_infra_procnum_t;
 
 #define RPCSVC_DEFAULT_OUTSTANDING_RPC_LIMIT                                   \
     64 /* Default for protocol/server */
@@ -161,11 +171,6 @@ struct rpcsvc_request {
 
     rpcsvc_program_t *prog;
 
-    /* The identifier for the call from client.
-     * Needed to pair the reply with the call.
-     */
-    uint32_t xid;
-
     int prognum;
 
     int progver;
@@ -237,11 +242,6 @@ struct rpcsvc_request {
      * sent to the client.
      */
     rpcsvc_auth_data_t verf;
-
-    /* Execute this request's actor function in ownthread of program?*/
-    gf_boolean_t ownthread;
-
-    gf_boolean_t synctask;
     /* Container for a RPC program wanting to store a temp
      * request-specific item.
      */
@@ -265,6 +265,16 @@ struct rpcsvc_request {
     /* ctime: origin of time on the client side, ideally this is
        the one we should consider for time */
     struct timespec ctime;
+
+    /* The identifier for the call from client.
+     * Needed to pair the reply with the call.
+     */
+    uint32_t xid;
+
+    /* Execute this request's actor function in ownthread of program?*/
+    gf_boolean_t ownthread;
+
+    gf_boolean_t synctask;
 };
 
 #define rpcsvc_request_program(req) ((rpcsvc_program_t *)((req)->prog))
@@ -298,6 +308,20 @@ struct rpcsvc_request {
                 req->uid = req->svc->anonuid;                                  \
             if (req->gid == RPC_ROOT_GID)                                      \
                 req->gid = req->svc->anongid;                                  \
+                                                                               \
+            for (gidcount = 0; gidcount < req->auxgidcount; ++gidcount) {      \
+                if (!req->auxgids[gidcount])                                   \
+                    req->auxgids[gidcount] = req->svc->anongid;                \
+            }                                                                  \
+        }                                                                      \
+    } while (0);
+
+#define RPC_AUTH_ALL_SQUASH(req)                                               \
+    do {                                                                       \
+        int gidcount = 0;                                                      \
+        if (req->svc->all_squash) {                                            \
+            req->uid = req->svc->anonuid;                                      \
+            req->gid = req->svc->anongid;                                      \
                                                                                \
             for (gidcount = 0; gidcount < req->auxgidcount; ++gidcount) {      \
                 if (!req->auxgids[gidcount])                                   \
@@ -362,6 +386,16 @@ typedef struct rpcsvc_actor_desc {
     drc_op_type_t op_type;
 } rpcsvc_actor_t;
 
+typedef struct rpcsvc_request_queue {
+    int gen;
+    struct list_head request_queue;
+    pthread_mutex_t queue_lock;
+    pthread_cond_t queue_cond;
+    pthread_t thread;
+    struct rpcsvc_program *program;
+    gf_boolean_t waiting;
+} rpcsvc_request_queue_t;
+
 /* Describes a program and its version along with the function pointers
  * required to handle the procedures/actors of each program/version.
  * Never changed ever by any thread so no need for a lock.
@@ -371,21 +405,20 @@ struct rpcsvc_program {
     int prognum;
     int progver;
     /* FIXME */
-    dict_t *options;   /* An opaque dictionary
-                        * populated by the program
-                        * (probably from xl->options)
-                        * which contain enough
-                        * information for transport to
-                        * initialize. As a part of
-                        * cleanup, the members of
-                        * options which are of interest
-                        * to transport should be put
-                        * into a structure for better
-                        * readability and structure
-                        * should replace options member
-                        * here.
-                        */
-    uint16_t progport; /* Registered with portmap */
+    dict_t *options; /* An opaque dictionary
+                      * populated by the program
+                      * (probably from xl->options)
+                      * which contain enough
+                      * information for transport to
+                      * initialize. As a part of
+                      * cleanup, the members of
+                      * options which are of interest
+                      * to transport should be put
+                      * into a structure for better
+                      * readability and structure
+                      * should replace options member
+                      * here.
+                      */
 #if 0
         int                     progaddrfamily; /* AF_INET or AF_INET6 */
         char                    *proghost;      /* Bind host, can be NULL */
@@ -413,24 +446,28 @@ struct rpcsvc_program {
      */
     int min_auth;
 
+    /* list member to link to list of registered services with rpcsvc */
+    struct list_head program;
+    rpcsvc_request_queue_t request_queue[EVENT_MAX_THREADS];
+    char request_queue_status[EVENT_MAX_THREADS / 8 + 1];
+    pthread_mutex_t thr_lock;
+    pthread_cond_t thr_cond;
+    int threadcount;
+    int thr_queue;
+    pthread_key_t req_queue_key;
+
+    /* eventthreadcount is just a readonly copy of the actual value
+     * owned by the event sub-system
+     * It is used to control the scaling of rpcsvc_request_handler threads
+     */
+    int eventthreadcount;
+    uint16_t progport; /* Registered with portmap */
     /* Execute actor function in program's own thread? This will reduce */
     /* the workload on poller threads */
     gf_boolean_t ownthread;
     gf_boolean_t alive;
 
     gf_boolean_t synctask;
-    /* list member to link to list of registered services with rpcsvc */
-    struct list_head program;
-    struct list_head request_queue;
-    pthread_mutex_t queue_lock;
-    pthread_cond_t queue_cond;
-    pthread_t thread;
-    int threadcount;
-    /* eventthreadcount is just a readonly copy of the actual value
-     * owned by the event sub-system
-     * It is used to control the scaling of rpcsvc_request_handler threads
-     */
-    int eventthreadcount;
 };
 
 typedef struct rpcsvc_cbk_program {
@@ -636,6 +673,8 @@ rpcsvc_set_addr_namelookup(rpcsvc_t *svc, dict_t *options);
 int
 rpcsvc_set_root_squash(rpcsvc_t *svc, dict_t *options);
 int
+rpcsvc_set_all_squash(rpcsvc_t *svc, dict_t *options);
+int
 rpcsvc_set_outstanding_rpc_limit(rpcsvc_t *svc, dict_t *options, int defvalue);
 
 int
@@ -652,9 +691,9 @@ rpcsvc_auth_array(rpcsvc_t *svc, char *volname, int *autharr, int arrlen);
 rpcsvc_vector_sizer
 rpcsvc_get_program_vector_sizer(rpcsvc_t *svc, uint32_t prognum,
                                 uint32_t progver, int procnum);
-extern int
-rpcsvc_ownthread_reconf(rpcsvc_t *svc, int new_eventthreadcount);
-
 void
 rpcsvc_autoscale_threads(glusterfs_ctx_t *ctx, rpcsvc_t *rpc, int incr);
+
+extern int
+rpcsvc_destroy(rpcsvc_t *svc);
 #endif

@@ -23,10 +23,10 @@
 #include "cli-cmd.h"
 #include "cli-mem-types.h"
 #include "cli1-xdr.h"
-#include "run.h"
-#include "syscall.h"
-#include "common-utils.h"
-#include "events.h"
+#include <glusterfs/run.h>
+#include <glusterfs/syscall.h>
+#include <glusterfs/common-utils.h>
+#include <glusterfs/events.h>
 
 extern struct rpc_clnt *global_rpc;
 extern struct rpc_clnt *global_quotad_rpc;
@@ -556,6 +556,8 @@ out:
     }
 
     CLI_STACK_DESTROY(frame);
+    if (dict)
+        dict_unref(dict);
 
     if (ret == 0 && GF_ANSWER_YES == answer) {
         gf_event(EVENT_VOLUME_STOP, "name=%s;force=%d", (char *)words[2],
@@ -850,13 +852,21 @@ out:
 #if (USE_EVENTS)
     if (ret == 0 && strcmp(words[2], "help") != 0) {
         ret1 = dict_get_int32(options, "count", &num_options);
-        if (ret1)
+        if (ret1) {
             num_options = 0;
-        else
+            goto end;
+        } else {
             num_options = num_options / 2;
+        }
 
+        char *free_list_key[num_options];
+        char *free_list_val[num_options];
+        for (i = 0; i < num_options; i++) {
+            free_list_key[i] = NULL;
+            free_list_val[i] = NULL;
+        }
         /* Initialize opts_str */
-        opts_str = gf_strdup("");
+        opts_str = "";
 
         /* Prepare String in format options=KEY1,VALUE1,KEY2,VALUE2 */
         for (i = 1; i <= num_options; i++) {
@@ -866,6 +876,7 @@ out:
                 tmp_opt = "";
 
             gf_asprintf(&opts_str, "%s,%s", opts_str, tmp_opt);
+            free_list_key[i - 1] = opts_str;
 
             sprintf(dict_key, "value%d", i);
             ret1 = dict_get_str(options, dict_key, &tmp_opt);
@@ -873,16 +884,21 @@ out:
                 tmp_opt = "";
 
             gf_asprintf(&opts_str, "%s,%s", opts_str, tmp_opt);
+            free_list_val[i - 1] = opts_str;
         }
 
         gf_event(EVENT_VOLUME_SET, "name=%s;options=%s", (char *)words[2],
                  opts_str);
 
         /* Allocated by gf_strdup and gf_asprintf */
-        GF_FREE(opts_str);
+        for (i = 0; i < num_options; i++) {
+            GF_FREE(free_list_key[i]);
+            GF_FREE(free_list_val[i]);
+        }
     }
 #endif
 
+end:
     CLI_STACK_DESTROY(frame);
 
     return ret;
@@ -1749,6 +1765,8 @@ out:
                    "xml format");
         }
     }
+    if (xdata)
+        dict_unref(xdata);
 
     if (fd != -1) {
         sys_close(fd);
@@ -1781,6 +1799,7 @@ cli_cmd_bitrot_cbk(struct cli_state *state, struct cli_cmd_word *word,
     int event_type = -1;
     char *tmp = NULL;
     char *events_str = NULL;
+    char *volname = NULL;
 #endif
 
     ret = cli_cmd_bitrot_parse(words, wordcount, &options);
@@ -1826,10 +1845,9 @@ out:
         if (ret1)
             cmd_type = -1;
         else {
-            ret1 = dict_get_str(options, "volname", &tmp);
+            ret1 = dict_get_str(options, "volname", &volname);
             if (ret1)
-                tmp = "";
-            gf_asprintf(&events_str, "name=%s", tmp);
+                volname = "";
         }
 
         switch (cmd_type) {
@@ -1847,21 +1865,21 @@ out:
                 ret1 = dict_get_str(options, "scrub-throttle-value", &tmp);
                 if (ret1)
                     tmp = "";
-                gf_asprintf(&events_str, "%s;value=%s", events_str, tmp);
+                gf_asprintf(&events_str, "name=%s;value=%s", volname, tmp);
                 break;
             case GF_BITROT_OPTION_TYPE_SCRUB_FREQ:
                 event_type = EVENT_BITROT_SCRUB_FREQ;
                 ret1 = dict_get_str(options, "scrub-frequency-value", &tmp);
                 if (ret1)
                     tmp = "";
-                gf_asprintf(&events_str, "%s;value=%s", events_str, tmp);
+                gf_asprintf(&events_str, "name=%s;value=%s", volname, tmp);
                 break;
             case GF_BITROT_OPTION_TYPE_SCRUB:
                 event_type = EVENT_BITROT_SCRUB_OPTION;
                 ret1 = dict_get_str(options, "scrub-value", &tmp);
                 if (ret1)
                     tmp = "";
-                gf_asprintf(&events_str, "%s;value=%s", events_str, tmp);
+                gf_asprintf(&events_str, "name=%s;value=%s", volname, tmp);
                 break;
             default:
                 break;
@@ -1970,6 +1988,8 @@ out:
                 "Quota command failed. Please check the cli "
                 "logs for more details");
     }
+    if (options)
+        dict_unref(options);
 
     /* Events for Quota */
     if (ret == 0) {
@@ -2146,6 +2166,8 @@ out:
 #endif
 
     CLI_STACK_DESTROY(frame);
+    if (options)
+        dict_unref(options);
 
     return ret;
 }
@@ -2844,7 +2866,7 @@ cli_launch_glfs_heal(int heal_op, dict_t *options)
     switch (heal_op) {
         case GF_SHD_OP_INDEX_SUMMARY:
             if (global_state->mode & GLUSTER_MODE_XML) {
-                runner_add_args(&runner, "xml", NULL);
+                runner_add_args(&runner, "--xml", NULL);
             }
             break;
         case GF_SHD_OP_SBRAIN_HEAL_FROM_BIGGER_FILE:
@@ -2866,7 +2888,7 @@ cli_launch_glfs_heal(int heal_op, dict_t *options)
         case GF_SHD_OP_SPLIT_BRAIN_FILES:
             runner_add_args(&runner, "split-brain-info", NULL);
             if (global_state->mode & GLUSTER_MODE_XML) {
-                runner_add_args(&runner, "xml", NULL);
+                runner_add_args(&runner, "--xml", NULL);
             }
             break;
         case GF_SHD_OP_GRANULAR_ENTRY_HEAL_ENABLE:
@@ -2876,13 +2898,15 @@ cli_launch_glfs_heal(int heal_op, dict_t *options)
         case GF_SHD_OP_HEAL_SUMMARY:
             runner_add_args(&runner, "info-summary", NULL);
             if (global_state->mode & GLUSTER_MODE_XML) {
-                runner_add_args(&runner, "xml", NULL);
+                runner_add_args(&runner, "--xml", NULL);
             }
             break;
         default:
             ret = -1;
             goto out;
     }
+    if (global_state->mode & GLUSTER_MODE_GLFSHEAL_NOLOG)
+        runner_add_args(&runner, "--nolog", NULL);
     ret = runner_start(&runner);
     if (ret == -1)
         goto out;
@@ -2953,6 +2977,9 @@ out:
             cli_out("Volume heal failed.");
         }
     }
+
+    if (options)
+        dict_unref(options);
 
     CLI_STACK_DESTROY(frame);
 
@@ -3397,10 +3424,12 @@ struct cli_cmd volume_cmds[] = {
      "reset all the reconfigured options"},
 
 #if (SYNCDAEMON_COMPILE)
-    {"volume " GEOREP " [<VOLNAME>] [<SLAVE-URL>] {create [[ssh-port n] "
-     "[[no-verify]|[push-pem]]] [force]"
-     "|start [force]|stop [force]|pause [force]|resume [force]|config|status "
-     "[detail]|delete [reset-sync-time]} [options...]",
+    {"volume " GEOREP " [<VOLNAME>] [<SLAVE-URL>] {\\\n create [[ssh-port n] "
+     "[[no-verify] | [push-pem]]] [force] \\\n"
+     " | start [force] \\\n | stop [force] \\\n | pause [force] \\\n | resume "
+     "[force] \\\n"
+     " | config [[[\\!]<option>] [<value>]] \\\n | status "
+     "[detail] \\\n | delete [reset-sync-time]} ",
      cli_cmd_volume_gsync_set_cbk, "Geo-sync operations",
      cli_cmd_check_gsync_exists_cbk},
 #endif

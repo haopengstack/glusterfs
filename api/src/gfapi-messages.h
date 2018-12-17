@@ -11,7 +11,7 @@
 #ifndef _GFAPI_MESSAGES_H__
 #define _GFAPI_MESSAGES_H__
 
-#include "glfs-message-id.h"
+#include <glusterfs/glfs-message-id.h>
 
 /* To add new message IDs, append new identifiers at the end of the list.
  *
@@ -49,6 +49,6 @@ GLFS_MSGID(API, API_MSG_MEM_ACCT_INIT_FAILED, API_MSG_MASTER_XLATOR_INIT_FAILED,
            API_MSG_INODE_LINK_FAILED, API_MSG_STATEDUMP_FAILED,
            API_MSG_XREADDIRP_R_FAILED, API_MSG_LOCK_INSERT_MERGE_FAILED,
            API_MSG_SETTING_LOCK_TYPE_FAILED, API_MSG_INODE_FIND_FAILED,
-           API_MSG_FDCTX_SET_FAILED);
+           API_MSG_FDCTX_SET_FAILED, API_MSG_UPCALL_SYNCOP_FAILED);
 
 #endif /* !_GFAPI_MESSAGES_H__ */

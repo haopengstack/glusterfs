@@ -11,9 +11,9 @@
 #ifndef __RPC_CLNT_H
 #define __RPC_CLNT_H
 
-#include "stack.h"
+#include <glusterfs/stack.h>
 #include "rpc-transport.h"
-#include "timer.h"
+#include <glusterfs/timer.h>
 #include "xdr-common.h"
 #include "glusterfs3.h"
 
@@ -52,8 +52,8 @@ struct saved_frame {
     };
     void *capital_this;
     void *frame;
-    struct timeval saved_at;
     struct rpc_req *rpcreq;
+    struct timeval saved_at;
     rpc_transport_rsp_t rsp;
 };
 

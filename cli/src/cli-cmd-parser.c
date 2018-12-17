@@ -18,8 +18,8 @@
 #include "cli.h"
 #include "cli-cmd.h"
 #include "cli-mem-types.h"
-#include "dict.h"
-#include "list.h"
+#include <glusterfs/dict.h>
+#include <glusterfs/list.h>
 
 #include "protocol-common.h"
 #include "cli1-xdr.h"
@@ -2724,7 +2724,7 @@ config_parse(const char **words, int wordcount, dict_t *dict, unsigned cmdi,
                 ret_chkpt = strptime(append_str, "%Y-%m-%d %H:%M:%S",
                                      &checkpoint_time);
 
-                if (ret_chkpt == NULL) {
+                if (ret_chkpt == NULL || *ret_chkpt != '\0') {
                     ret = -1;
                     cli_err(
                         "Invalid Checkpoint label. Use format "

@@ -10,18 +10,18 @@
 
 #include <inttypes.h>
 
-#include "xlator.h"
+#include <glusterfs/xlator.h>
 #include "nfs3.h"
 #include "nfs3-fh.h"
 #include "msg-nfs3.h"
-#include "rbthash.h"
+#include <glusterfs/rbthash.h>
 #include "nfs-fops.h"
 #include "nfs-inodes.h"
 #include "nfs-generics.h"
 #include "nfs3-helpers.h"
 #include "nfs-mem-types.h"
-#include "iatt.h"
-#include "common-utils.h"
+#include <glusterfs/iatt.h>
+#include <glusterfs/common-utils.h>
 #include "nfs-messages.h"
 #include "mount3.h"
 #include <string.h>
@@ -3556,6 +3556,12 @@ nfs3_fh_resolve_entry_lookup_cbk(call_frame_t *frame, void *cookie,
         inode_lookup(linked_inode);
         inode_unref(cs->resolvedloc.inode);
         cs->resolvedloc.inode = linked_inode;
+    } else {
+        /* nfs3_fh_resolve_entry_hard() use to resolve entire path if needed.
+         * So the ctx for inode obtained from here need to set properly,
+         * otherwise it may result in a crash.
+         */
+        nfs_fix_generation(this, inode);
     }
 err:
     nfs3_call_resume(cs);

@@ -8,14 +8,14 @@
    cases as published by the Free Software Foundation.
 */
 
-#include "xlator.h"
+#include <glusterfs/xlator.h>
 #include "posix-metadata.h"
 #include "posix-metadata-disk.h"
 #include "posix-handle.h"
 #include "posix-messages.h"
-#include "syscall.h"
-#include "compat-errno.h"
-#include "compat.h"
+#include <glusterfs/syscall.h>
+#include <glusterfs/compat-errno.h>
+#include <glusterfs/compat.h>
 
 static int gf_posix_xattr_enotsup_log;
 
@@ -269,6 +269,7 @@ __posix_get_mdata_xattr(xlator_t *this, const char *real_path, int _fd,
              */
             if (stbuf && op_errno != ENOENT) {
                 ret = 0;
+                GF_FREE(mdata);
                 goto out;
             } else {
                 /* This case should not be hit. If it hits,
@@ -342,6 +343,7 @@ posix_set_mdata_xattr(xlator_t *this, const char *real_path, int fd,
     posix_mdata_t *mdata = NULL;
     int ret = -1;
     int op_errno = 0;
+    bool free_mdata = false;
 
     GF_VALIDATE_OR_GOTO("posix", this, out);
     GF_VALIDATE_OR_GOTO(this->name, inode, out);
@@ -412,6 +414,8 @@ posix_set_mdata_xattr(xlator_t *this, const char *real_path, int fd,
                 mdata->mtime.tv_nsec = time->tv_nsec;
 
                 __inode_ctx_set1(inode, this, (uint64_t *)&mdata);
+            } else {
+                free_mdata = true;
             }
         }
 
@@ -484,6 +488,9 @@ out:
         stbuf->ia_atime = mdata->atime.tv_sec;
         stbuf->ia_atime_nsec = mdata->atime.tv_nsec;
     }
+
+    if (free_mdata)
+        GF_FREE(mdata);
 
     return ret;
 }
@@ -651,6 +658,84 @@ posix_set_parent_ctime(call_frame_t *frame, xlator_t *this,
             gf_msg(this->name, GF_LOG_WARNING, errno, P_MSG_SETMDATA_FAILED,
                    "posix set mdata failed on file: %s gfid:%s", real_path,
                    uuid_utoa(inode->gfid));
+        }
+    }
+out:
+    return;
+}
+
+void
+posix_set_ctime_cfr(call_frame_t *frame, xlator_t *this,
+                    const char *real_path_in, int fd_in, inode_t *inode_in,
+                    struct iatt *stbuf_in, const char *real_path_out,
+                    int fd_out, inode_t *inode_out, struct iatt *stbuf_out)
+{
+    posix_mdata_flag_t flag = {
+        0,
+    };
+    posix_mdata_flag_t flag_dup = {
+        0,
+    };
+    int ret = 0;
+    struct posix_private *priv = NULL;
+
+    priv = this->private;
+
+    if (priv->ctime) {
+        (void)posix_get_mdata_flag(frame->root->flags, &flag);
+        if ((flag.ctime == 0) && (flag.mtime == 0) && (flag.atime == 0)) {
+            goto out;
+        }
+
+        if (frame->root->ctime.tv_sec == 0) {
+            gf_msg(this->name, GF_LOG_WARNING, errno, P_MSG_SETMDATA_FAILED,
+                   "posix set mdata failed, No ctime : in: %s gfid_in:%s "
+                   "out: %s gfid_out:%s",
+                   real_path_in,
+                   inode_in ? uuid_utoa(inode_in->gfid) : "No inode",
+                   real_path_out,
+                   inode_out ? uuid_utoa(inode_out->gfid) : "No inode");
+            goto out;
+        }
+
+        flag_dup = flag;
+
+        /*
+         * For the destination file, no need to update atime.
+         * It got modified. Hence the things that need to be
+         * changed are mtime and ctime (provided the utime
+         * xlator from the client has set those flags, which
+         * are just copied to flag_dup).
+         */
+        if (flag.atime)
+            flag_dup.atime = 0;
+
+        ret = posix_set_mdata_xattr(this, real_path_out, fd_out, inode_out,
+                                    &frame->root->ctime, stbuf_out, &flag_dup,
+                                    _gf_false);
+        if (ret) {
+            gf_msg(this->name, GF_LOG_WARNING, errno, P_MSG_SETMDATA_FAILED,
+                   "posix set mdata failed on file: %s gfid:%s", real_path_out,
+                   inode_out ? uuid_utoa(inode_out->gfid) : "No inode");
+        }
+
+        /*
+         * For the source file, no need to change the mtime and ctime.
+         * For source file, it is only read operation. So, if at all
+         * anything needs to be updated, it is only the atime.
+         */
+        if (flag.atime)
+            flag_dup.atime = flag.atime;
+        flag_dup.mtime = 0;
+        flag_dup.ctime = 0;
+
+        ret = posix_set_mdata_xattr(this, real_path_in, fd_out, inode_out,
+                                    &frame->root->ctime, stbuf_out, &flag_dup,
+                                    _gf_false);
+        if (ret) {
+            gf_msg(this->name, GF_LOG_WARNING, errno, P_MSG_SETMDATA_FAILED,
+                   "posix set mdata failed on file: %s gfid:%s", real_path_in,
+                   inode_in ? uuid_utoa(inode_in->gfid) : "No inode");
         }
     }
 out:

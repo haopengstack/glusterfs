@@ -10,7 +10,7 @@
 #ifndef __COMMON_H__
 #define __COMMON_H__
 
-#include "lkowner.h"
+#include <glusterfs/lkowner.h>
 /*dump locks format strings */
 #define RANGE_FMT "type=%s, whence=%hd, start=%llu, len=%llu"
 #define ENTRY_FMT "type=%s on basename=%s"
@@ -177,8 +177,8 @@ __pl_entrylk_unref(pl_entry_lock_t *lock);
 int
 pl_metalock_is_active(pl_inode_t *pl_inode);
 
-int
-__pl_queue_lock(pl_inode_t *pl_inode, posix_lock_t *reqlock, int can_block);
+void
+__pl_queue_lock(pl_inode_t *pl_inode, posix_lock_t *reqlock);
 
 gf_boolean_t
 pl_does_monkey_want_stuck_lock();

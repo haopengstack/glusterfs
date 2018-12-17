@@ -10,9 +10,10 @@
 #ifndef __QUOTA_MEM_TYPES_H__
 #define __QUOTA_MEM_TYPES_H__
 
-#include "mem-types.h"
+#include <glusterfs/mem-types.h>
 
 enum gf_quota_mem_types_ {
+    /* Those are used by QUOTA_ALLOC_OR_GOTO macro */
     gf_quota_mt_quota_priv_t = gf_common_mt_end + 1,
     gf_quota_mt_quota_inode_ctx_t,
     gf_quota_mt_loc_t,

@@ -11,7 +11,7 @@
 #include "changelog-rpc-common.h"
 #include "changelog-messages.h"
 
-#include "syscall.h"
+#include <glusterfs/syscall.h>
 /**
 *****************************************************
                   Client Interface
@@ -260,6 +260,7 @@ changelog_rpc_server_destroy(xlator_t *this, rpcsvc_t *rpc, char *sockfile,
     rpcsvc_listener_t *listener = NULL;
     rpcsvc_listener_t *next = NULL;
     struct rpcsvc_program *prog = NULL;
+    rpc_transport_t *trans = NULL;
 
     while (*progs) {
         prog = *progs;
@@ -269,22 +270,25 @@ changelog_rpc_server_destroy(xlator_t *this, rpcsvc_t *rpc, char *sockfile,
 
     list_for_each_entry_safe(listener, next, &rpc->listeners, list)
     {
-        rpcsvc_listener_destroy(listener);
+        if (listener->trans) {
+            trans = listener->trans;
+            rpc_transport_disconnect(trans, _gf_false);
+        }
     }
 
     (void)rpcsvc_unregister_notify(rpc, fn, this);
-    sys_unlink(sockfile);
-    if (rpc->rxpool) {
-        mem_pool_destroy(rpc->rxpool);
-        rpc->rxpool = NULL;
-    }
 
     /* TODO Avoid freeing rpc object in case of brick multiplex
        after freeing rpc object svc->rpclock corrupted and it takes
        more time to detach a brick
     */
-    if (!this->cleanup_starting)
+    if (!this->cleanup_starting) {
+        if (rpc->rxpool) {
+            mem_pool_destroy(rpc->rxpool);
+            rpc->rxpool = NULL;
+        }
         GF_FREE(rpc);
+    }
 }
 
 rpcsvc_t *
@@ -298,10 +302,6 @@ changelog_rpc_server_init(xlator_t *this, char *sockfile, void *cbkdata,
 
     if (!cbkdata)
         cbkdata = this;
-
-    options = dict_new();
-    if (!options)
-        goto error_return;
 
     ret = rpcsvc_transport_unix_options_build(&options, sockfile);
     if (ret)
@@ -350,6 +350,5 @@ dealloc_rpc:
     GF_FREE(rpc);
 dealloc_dict:
     dict_unref(options);
-error_return:
     return NULL;
 }

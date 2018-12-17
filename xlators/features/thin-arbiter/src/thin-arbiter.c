@@ -11,11 +11,11 @@
 #include "thin-arbiter.h"
 #include "thin-arbiter-messages.h"
 #include "thin-arbiter-mem-types.h"
-#include "glusterfs.h"
-#include "xlator.h"
-#include "logging.h"
-#include "byte-order.h"
-#include "common-utils.h"
+#include <glusterfs/glusterfs.h>
+#include <glusterfs/xlator.h>
+#include <glusterfs/logging.h>
+#include <glusterfs/byte-order.h>
+#include <glusterfs/common-utils.h>
 
 int
 ta_set_incoming_values(dict_t *dict, char *key, data_t *value, void *data)
@@ -645,4 +645,17 @@ struct xlator_cbks cbks = {};
 
 struct volume_options options[] = {
     {.key = {NULL}},
+};
+
+xlator_api_t xlator_api = {
+    .init = init,
+    .fini = fini,
+    .reconfigure = reconfigure,
+    .mem_acct_init = mem_acct_init,
+    .op_version = {GD_OP_VERSION_6_0},
+    .fops = &fops,
+    .cbks = &cbks,
+    .options = options,
+    .identifier = "thin-arbiter",
+    .category = GF_MAINTAINED,
 };

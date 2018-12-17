@@ -14,12 +14,12 @@
 #include "server.h"
 #include "server-helpers.h"
 #include "glusterfs3-xdr.h"
-#include "call-stub.h"
-#include "statedump.h"
-#include "defaults.h"
+#include <glusterfs/call-stub.h>
+#include <glusterfs/statedump.h>
+#include <glusterfs/defaults.h>
 #include "authenticate.h"
-#include "gf-event.h"
-#include "events.h"
+#include <glusterfs/gf-event.h>
+#include <glusterfs/events.h>
 #include "server-messages.h"
 #include "rpc-clnt.h"
 #include "glusterfsd.h"
@@ -929,12 +929,6 @@ do_rpc:
     if (ret)
         goto out;
 
-    /* rpcsvc thread reconfigure should be after events thread
-     * reconfigure
-     */
-    new_nthread = ((struct event_pool *)(this->ctx->event_pool))
-                      ->eventthreadcount;
-    ret = rpcsvc_ownthread_reconf(rpc_conf, new_nthread);
 out:
     THIS = oldTHIS;
     gf_msg_debug("", 0, "returning %d", ret);
@@ -990,6 +984,49 @@ server_dump_metrics(xlator_t *this, int fd)
     pthread_mutex_unlock(&conf->mutex);
 
     return 0;
+}
+
+void
+server_cleanup(xlator_t *this, server_conf_t *conf)
+{
+    if (!this || !conf)
+        return;
+
+    LOCK_DESTROY(&conf->itable_lock);
+    pthread_mutex_destroy(&conf->mutex);
+
+    if (this->ctx->event_pool) {
+        /* Free the event pool */
+        (void)event_pool_destroy(this->ctx->event_pool);
+    }
+
+    if (dict_get(this->options, "config-directory")) {
+        GF_FREE(conf->conf_dir);
+        conf->conf_dir = NULL;
+    }
+
+    if (conf->child_status) {
+        GF_FREE(conf->child_status);
+        conf->child_status = NULL;
+    }
+
+    if (this->ctx->statedump_path) {
+        GF_FREE(this->ctx->statedump_path);
+        this->ctx->statedump_path = NULL;
+    }
+
+    if (conf->auth_modules) {
+        gf_auth_fini(conf->auth_modules);
+        dict_unref(conf->auth_modules);
+    }
+
+    if (conf->rpc) {
+        (void)rpcsvc_destroy(conf->rpc);
+        conf->rpc = NULL;
+    }
+
+    GF_FREE(conf);
+    this->private = NULL;
 }
 
 int
@@ -1067,6 +1104,7 @@ server_init(xlator_t *this)
     ret = gf_auth_init(this, conf->auth_modules);
     if (ret) {
         dict_unref(conf->auth_modules);
+        conf->auth_modules = NULL;
         goto out;
     }
 
@@ -1133,6 +1171,9 @@ server_init(xlator_t *this)
         ret = -1;
         goto out;
     }
+
+    ret = dict_set_int32(this->options, "notify-poller-death", 1);
+
     ret = rpcsvc_create_listeners(conf->rpc, this->options, this->name);
     if (ret < 1) {
         gf_msg(this->name, GF_LOG_WARNING, 0,
@@ -1242,15 +1283,7 @@ out:
         if (this != NULL) {
             this->fini(this);
         }
-
-        if (conf && conf->rpc) {
-            rpcsvc_listener_t *listener, *next;
-            list_for_each_entry_safe(listener, next, &conf->rpc->listeners,
-                                     list)
-            {
-                rpcsvc_listener_destroy(listener);
-            }
-        }
+        server_cleanup(this, conf);
     }
 
     return ret;
@@ -1681,7 +1714,7 @@ struct volume_options server_options[] = {
         .type = GF_OPTION_TYPE_TIME,
         .min = 0,
         .max = 1013,
-        .default_value = "42", /* default like network.ping-timeout */
+        .default_value = TOSTRING(GF_NETWORK_TIMEOUT),
     },
     {
         .key = {"transport.*"},
@@ -1715,13 +1748,22 @@ struct volume_options server_options[] = {
                     "as user bin or group staff.",
      .op_version = {2},
      .flags = OPT_FLAG_SETTABLE | OPT_FLAG_DOC},
+    {.key = {"all-squash"},
+     .type = GF_OPTION_TYPE_BOOL,
+     .default_value = "off",
+     .description = "Map requests from any uid/gid to the anonymous "
+                    "uid/gid. Note that this does not apply to any other "
+                    "uids or gids that might be equally sensitive, such "
+                    "as user bin or group staff.",
+     .op_version = {GD_OP_VERSION_6_0},
+     .flags = OPT_FLAG_SETTABLE | OPT_FLAG_DOC},
     {.key = {"anonuid"},
      .type = GF_OPTION_TYPE_INT,
      .default_value = "65534", /* RPC_NOBODY_UID */
      .min = 0,
      .max = (uint32_t)-1,
      .description = "value of the uid used for the anonymous "
-                    "user/nfsnobody when root-squash is enabled.",
+                    "user/nfsnobody when root-squash/all-squash is enabled.",
      .op_version = {3},
      .flags = OPT_FLAG_SETTABLE | OPT_FLAG_DOC},
     {.key = {"anongid"},
@@ -1730,7 +1772,7 @@ struct volume_options server_options[] = {
      .min = 0,
      .max = (uint32_t)-1,
      .description = "value of the gid used for the anonymous "
-                    "user/nfsnobody when root-squash is enabled.",
+                    "user/nfsnobody when root-squash/all-squash is enabled.",
      .op_version = {3},
      .flags = OPT_FLAG_SETTABLE | OPT_FLAG_DOC},
     {.key = {"statedump-path"},
@@ -1807,7 +1849,7 @@ struct volume_options server_options[] = {
      .type = GF_OPTION_TYPE_INT,
      .min = 1,
      .max = 1024,
-     .default_value = "1",
+     .default_value = "2",
      .description = "Specifies the number of event threads to execute "
                     "in parallel. Larger values would help process"
                     " responses faster, depending on available processing"

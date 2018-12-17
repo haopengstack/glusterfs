@@ -10,8 +10,8 @@
 #include <stdio.h>
 #include <libgen.h>
 
-#include "common-utils.h"
-#include "syscall.h"
+#include <glusterfs/common-utils.h>
+#include <glusterfs/syscall.h>
 
 #define MAX_GFID2PATH_LINK_SUP 500
 #define GFID_SIZE 16
@@ -28,7 +28,7 @@ main(int argc, char **argv)
     uuid_t pgfid_raw = {
         0,
     };
-    char pgfid[36] = "";
+    char pgfid[36 + 1] = "";
     char xxh64[GF_XXH64_DIGEST_LENGTH * 2 + 1] = {
         0,
     };

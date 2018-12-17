@@ -8,14 +8,14 @@
   cases as published by the Free Software Foundation.
 */
 
-#include "dict.h"
-#include "glusterfs.h"
-#include "iobuf.h"
-#include "logging.h"
+#include <glusterfs/dict.h>
+#include <glusterfs/glusterfs.h>
+#include <glusterfs/iobuf.h>
+#include <glusterfs/logging.h>
 #include "rdma.h"
 #include "name.h"
-#include "byte-order.h"
-#include "xlator.h"
+#include <glusterfs/byte-order.h>
+#include <glusterfs/xlator.h>
 #include "xdr-rpc.h"
 #include "rpc-lib-messages.h"
 #include "rpc-trans-rdma-messages.h"
@@ -2880,9 +2880,7 @@ gf_rdma_submit_request(rpc_transport_t *this, rpc_transport_req_t *req)
 {
     int32_t ret = 0;
     gf_rdma_ioq_t *entry = NULL;
-    rpc_transport_data_t data = {
-        0,
-    };
+    rpc_transport_data_t data;
     gf_rdma_private_t *priv = NULL;
     gf_rdma_peer_t *peer = NULL;
 
@@ -2940,9 +2938,7 @@ gf_rdma_submit_reply(rpc_transport_t *this, rpc_transport_reply_t *reply)
 {
     int32_t ret = 0;
     gf_rdma_ioq_t *entry = NULL;
-    rpc_transport_data_t data = {
-        0,
-    };
+    rpc_transport_data_t data;
 
     if (reply == NULL) {
         goto out;

@@ -11,7 +11,7 @@
 #ifdef RPC_XDR
 %#include "rpc-pragmas.h"
 #endif
-%#include "compat.h"
+%#include <glusterfs/compat.h>
 
 /* NOTE: add members ONLY at the end (just before _MAXVALUE) */
 /*
@@ -77,6 +77,7 @@ enum glusterfs_fop_t {
         GF_FOP_PUT,
         GF_FOP_ICREATE,
         GF_FOP_NAMELINK,
+        GF_FOP_COPY_FILE_RANGE,
         GF_FOP_MAXVALUE
 };
 

@@ -12,23 +12,23 @@
  * Every other protocol version gets initialized from here.
  */
 
-#include "defaults.h"
+#include <glusterfs/defaults.h>
 #include "rpcsvc.h"
-#include "dict.h"
-#include "xlator.h"
+#include <glusterfs/dict.h>
+#include <glusterfs/xlator.h>
 #include "nfs.h"
-#include "mem-pool.h"
-#include "logging.h"
+#include <glusterfs/mem-pool.h>
+#include <glusterfs/logging.h>
 #include "nfs-fops.h"
 #include "mount3.h"
 #include "nfs3.h"
 #include "nfs-mem-types.h"
 #include "nfs3-helpers.h"
 #include "nlm4.h"
-#include "options.h"
+#include <glusterfs/options.h>
 #include "acl3.h"
 #include "rpc-drc.h"
-#include "syscall.h"
+#include <glusterfs/syscall.h>
 #include "rpcsvc.h"
 #include "nfs-messages.h"
 
@@ -1529,7 +1529,7 @@ notify(xlator_t *this, int32_t event, void *data, ...)
     return 0;
 }
 
-int
+void
 fini(xlator_t *this)
 {
     struct nfs_state *nfs = NULL;
@@ -1539,7 +1539,7 @@ fini(xlator_t *this)
     gf_msg_debug(GF_NFS, 0, "NFS service going down");
     nfs_deinit_versions(&nfs->versions, this);
     GF_FREE(this->instance_name);
-    return 0;
+    return;
 }
 
 int32_t
@@ -2030,7 +2030,7 @@ struct volume_options options[] = {
         .type = GF_OPTION_TYPE_SIZET,
         .min = 1,
         .max = 32,
-        .default_value = "1",
+        .default_value = "2",
         .description = "Specifies the number of event threads to execute in"
                        "in parallel. Larger values would help process"
                        " responses faster, depending on available processing"
@@ -2039,4 +2039,19 @@ struct volume_options options[] = {
         .flags = OPT_FLAG_SETTABLE,
     },
     {.key = {NULL}},
+};
+
+xlator_api_t xlator_api = {
+    .init = init,
+    .fini = fini,
+    .notify = notify,
+    .reconfigure = reconfigure,
+    .mem_acct_init = mem_acct_init,
+    .op_version = {1},
+    .dumpops = &dumpops,
+    .fops = &fops,
+    .cbks = &cbks,
+    .options = options,
+    .identifier = "gnfs",
+    .category = GF_MAINTAINED,
 };

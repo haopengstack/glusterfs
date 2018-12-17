@@ -8,17 +8,17 @@
   cases as published by the Free Software Foundation.
 */
 
-#include "glusterfs.h"
-#include "logging.h"
-#include "dict.h"
-#include "xlator.h"
-#include "list.h"
-#include "compat.h"
-#include "compat-errno.h"
-#include "common-utils.h"
-#include "call-stub.h"
-#include "statedump.h"
-#include "defaults.h"
+#include <glusterfs/glusterfs.h>
+#include <glusterfs/logging.h>
+#include <glusterfs/dict.h>
+#include <glusterfs/xlator.h>
+#include <glusterfs/list.h>
+#include <glusterfs/compat.h>
+#include <glusterfs/compat-errno.h>
+#include <glusterfs/common-utils.h>
+#include <glusterfs/call-stub.h>
+#include <glusterfs/statedump.h>
+#include <glusterfs/defaults.h>
 #include "write-behind-mem-types.h"
 #include "write-behind-messages.h"
 
@@ -1744,15 +1744,9 @@ wb_do_winds(wb_inode_t *wb_inode, list_head_t *tasks)
 void
 wb_process_queue(wb_inode_t *wb_inode)
 {
-    list_head_t tasks = {
-        0,
-    };
-    list_head_t lies = {
-        0,
-    };
-    list_head_t liabilities = {
-        0,
-    };
+    list_head_t tasks;
+    list_head_t lies;
+    list_head_t liabilities;
     int wind_failure = 0;
 
     INIT_LIST_HEAD(&tasks);
@@ -1773,15 +1767,18 @@ wb_process_queue(wb_inode_t *wb_inode)
         }
         UNLOCK(&wb_inode->lock);
 
-        wb_do_unwinds(wb_inode, &lies);
+        if (!list_empty(&lies))
+            wb_do_unwinds(wb_inode, &lies);
 
-        wb_do_winds(wb_inode, &tasks);
+        if (!list_empty(&tasks))
+            wb_do_winds(wb_inode, &tasks);
 
         /* If there is an error in wb_fulfill before winding write
          * requests, we would miss invocation of wb_process_queue
          * from wb_fulfill_cbk. So, retry processing again.
          */
-        wind_failure = wb_fulfill(wb_inode, &liabilities);
+        if (!list_empty(&liabilities))
+            wind_failure = wb_fulfill(wb_inode, &liabilities);
     } while (wind_failure);
 
     return;
@@ -3154,6 +3151,14 @@ struct xlator_dumpops dumpops = {
 };
 
 struct volume_options options[] = {
+    {
+        .key = {"write-behind"},
+        .type = GF_OPTION_TYPE_BOOL,
+        .default_value = "off",
+        .description = "enable/disable write-behind",
+        .op_version = {GD_OP_VERSION_6_0},
+        .flags = OPT_FLAG_SETTABLE,
+    },
     {.key = {"flush-behind"},
      .type = GF_OPTION_TYPE_BOOL,
      .default_value = "on",
@@ -3235,4 +3240,18 @@ struct volume_options options[] = {
                        "\"aggregate-size\" bytes",
     },
     {.key = {NULL}},
+};
+
+xlator_api_t xlator_api = {
+    .init = init,
+    .fini = fini,
+    .reconfigure = reconfigure,
+    .mem_acct_init = mem_acct_init,
+    .op_version = {1}, /* Present from the initial version */
+    .dumpops = &dumpops,
+    .fops = &fops,
+    .cbks = &cbks,
+    .options = options,
+    .identifier = "write-behind",
+    .category = GF_MAINTAINED,
 };

@@ -8,20 +8,20 @@
   cases as published by the Free Software Foundation.
 */
 
-#include "call-stub.h"
-#include "defaults.h"
-#include "glusterfs.h"
-#include "logging.h"
-#include "dict.h"
-#include "xlator.h"
+#include <glusterfs/call-stub.h>
+#include <glusterfs/defaults.h>
+#include <glusterfs/glusterfs.h>
+#include <glusterfs/logging.h>
+#include <glusterfs/dict.h>
+#include <glusterfs/xlator.h>
 #include "io-threads.h"
 #include <signal.h>
 #include <stdlib.h>
 #include <sys/time.h>
 #include <time.h>
-#include "locking.h"
+#include <glusterfs/locking.h>
 #include "io-threads-messages.h"
-#include "timespec.h"
+#include <glusterfs/timespec.h>
 
 void *
 iot_worker(void *arg);
@@ -1559,4 +1559,19 @@ struct volume_options options[] = {
     {
         .key = {NULL},
     },
+};
+
+xlator_api_t xlator_api = {
+    .init = init,
+    .fini = fini,
+    .notify = notify,
+    .reconfigure = reconfigure,
+    .mem_acct_init = mem_acct_init,
+    .op_version = {1}, /* Present from the initial version */
+    .dumpops = &dumpops,
+    .fops = &fops,
+    .cbks = &cbks,
+    .options = options,
+    .identifier = "io-threads",
+    .category = GF_MAINTAINED,
 };

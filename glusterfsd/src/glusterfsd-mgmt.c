@@ -13,10 +13,10 @@
 #include <stdlib.h>
 #include <signal.h>
 
-#include "glusterfs.h"
-#include "dict.h"
-#include "gf-event.h"
-#include "defaults.h"
+#include <glusterfs/glusterfs.h>
+#include <glusterfs/dict.h>
+#include <glusterfs/gf-event.h>
+#include <glusterfs/defaults.h>
 
 #include "rpc-clnt.h"
 #include "protocol-common.h"
@@ -28,11 +28,11 @@
 #include "glusterfsd.h"
 #include "rpcsvc.h"
 #include "cli1-xdr.h"
-#include "statedump.h"
-#include "syncop.h"
-#include "xlator.h"
-#include "syscall.h"
-#include "monitoring.h"
+#include <glusterfs/statedump.h>
+#include <glusterfs/syncop.h>
+#include <glusterfs/xlator.h>
+#include <glusterfs/syscall.h>
+#include <glusterfs/monitoring.h>
 #include "server.h"
 
 static gf_boolean_t is_mgmt_rpc_reconnect = _gf_false;
@@ -1642,7 +1642,6 @@ glusterfs_handle_barrier(rpcsvc_request_t *req)
     xlator_t *old_THIS = NULL;
     dict_t *dict = NULL;
     gf_boolean_t barrier = _gf_true;
-    gf_boolean_t barrier_err = _gf_false;
     xlator_list_t *trav;
 
     GF_ASSERT(req);
@@ -1713,8 +1712,6 @@ glusterfs_handle_barrier(rpcsvc_request_t *req)
         barrier = dict_get_str_boolean(dict, "barrier", _gf_true);
         if (barrier)
             goto submit_reply;
-        else
-            barrier_err = _gf_true;
     }
 
     /* Reset THIS so that we have it correct in case of an error below
@@ -1739,8 +1736,6 @@ glusterfs_handle_barrier(rpcsvc_request_t *req)
         goto submit_reply;
     }
 
-    if (barrier_err)
-        ret = -1;
 
 submit_reply:
     THIS = old_THIS;

@@ -8,10 +8,10 @@
   cases as published by the Free Software Foundation.
 */
 
-#include "glusterfs.h"
-#include "logging.h"
-#include "dict.h"
-#include "xlator.h"
+#include <glusterfs/glusterfs.h>
+#include <glusterfs/logging.h>
+#include <glusterfs/dict.h>
+#include <glusterfs/xlator.h>
 #include "read-ahead.h"
 #include <assert.h>
 #include "read-ahead-messages.h"
@@ -25,7 +25,7 @@ ra_page_get(ra_file_t *file, off_t offset)
     GF_VALIDATE_OR_GOTO("read-ahead", file, out);
 
     page = file->pages.next;
-    rounded_offset = floor(offset, file->page_size);
+    rounded_offset = gf_floor(offset, file->page_size);
 
     while (page != &file->pages && page->offset < rounded_offset)
         page = page->next;
@@ -47,7 +47,7 @@ ra_page_create(ra_file_t *file, off_t offset)
     GF_VALIDATE_OR_GOTO("read-ahead", file, out);
 
     page = file->pages.next;
-    rounded_offset = floor(offset, file->page_size);
+    rounded_offset = gf_floor(offset, file->page_size);
 
     while (page != &file->pages && page->offset < rounded_offset)
         page = page->next;

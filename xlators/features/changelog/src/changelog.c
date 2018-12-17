@@ -8,11 +8,11 @@
    cases as published by the Free Software Foundation.
 */
 
-#include "xlator.h"
-#include "defaults.h"
-#include "syscall.h"
-#include "logging.h"
-#include "iobuf.h"
+#include <glusterfs/xlator.h>
+#include <glusterfs/defaults.h>
+#include <glusterfs/syscall.h>
+#include <glusterfs/logging.h>
+#include <glusterfs/iobuf.h>
 
 #include "changelog-rt.h"
 
@@ -2004,12 +2004,43 @@ notify(xlator_t *this, int event, void *data, ...)
     struct list_head queue = {
         0,
     };
+    uint64_t xprtcnt = 0;
+    uint64_t clntcnt = 0;
+    changelog_clnt_t *conn = NULL;
+    gf_boolean_t cleanup_notify = _gf_false;
 
     INIT_LIST_HEAD(&queue);
 
     priv = this->private;
     if (!priv)
         goto out;
+
+    if (event == GF_EVENT_PARENT_DOWN) {
+        priv->victim = data;
+        gf_log(this->name, GF_LOG_INFO,
+               "cleanup changelog rpc connection of brick %s",
+               priv->victim->name);
+
+        this->cleanup_starting = 1;
+        changelog_destroy_rpc_listner(this, priv);
+        conn = &priv->connections;
+        if (conn)
+            changelog_ev_cleanup_connections(this, conn);
+        xprtcnt = GF_ATOMIC_GET(priv->xprtcnt);
+        clntcnt = GF_ATOMIC_GET(priv->clntcnt);
+
+        if (!xprtcnt && !clntcnt) {
+            LOCK(&priv->lock);
+            {
+                cleanup_notify = priv->notify_down;
+                priv->notify_down = _gf_true;
+            }
+            UNLOCK(&priv->lock);
+            if (!cleanup_notify)
+                default_notify(this, GF_EVENT_PARENT_DOWN, data);
+        }
+        goto out;
+    }
 
     if (event == GF_EVENT_TRANSLATOR_OP) {
         dict = data;
@@ -2629,8 +2660,10 @@ static void
 changelog_cleanup_rpc(xlator_t *this, changelog_priv_t *priv)
 {
     /* terminate rpc server */
-    changelog_destroy_rpc_listner(this, priv);
+    if (!this->cleanup_starting)
+        changelog_destroy_rpc_listner(this, priv);
 
+    (void)changelog_cleanup_rpc_threads(this, priv);
     /* cleanup rot buffs */
     rbuf_dtor(priv->rbuf);
 
@@ -2703,6 +2736,10 @@ init(xlator_t *this)
 
     LOCK_INIT(&priv->lock);
     LOCK_INIT(&priv->c_snap_lock);
+    GF_ATOMIC_INIT(priv->listnercnt, 0);
+    GF_ATOMIC_INIT(priv->clntcnt, 0);
+    GF_ATOMIC_INIT(priv->xprtcnt, 0);
+    INIT_LIST_HEAD(&priv->xprt_list);
 
     ret = changelog_init_options(this, priv);
     if (ret)
@@ -2909,4 +2946,18 @@ struct volume_options options[] = {
      .level = OPT_STATUS_BASIC,
      .tags = {"journal", "glusterfind"}},
     {.key = {NULL}},
+};
+
+xlator_api_t xlator_api = {
+    .init = init,
+    .fini = fini,
+    .notify = notify,
+    .reconfigure = reconfigure,
+    .mem_acct_init = mem_acct_init,
+    .op_version = {1}, /* Present from the initial version */
+    .fops = &fops,
+    .cbks = &cbks,
+    .options = options,
+    .identifier = "changelog",
+    .category = GF_MAINTAINED,
 };

@@ -12,9 +12,9 @@
 
 #include "shard.h"
 #include "shard-mem-types.h"
-#include "byte-order.h"
-#include "defaults.h"
-#include "statedump.h"
+#include <glusterfs/byte-order.h>
+#include <glusterfs/defaults.h>
+#include <glusterfs/statedump.h>
 
 static gf_boolean_t
 __is_shard_dir(uuid_t gfid)
@@ -6821,6 +6821,14 @@ struct xlator_dumpops dumpops = {
 
 struct volume_options options[] = {
     {
+        .key = {"shard"},
+        .type = GF_OPTION_TYPE_BOOL,
+        .default_value = "off",
+        .description = "enable/disable shard",
+        .op_version = {GD_OP_VERSION_6_0},
+        .flags = OPT_FLAG_SETTABLE,
+    },
+    {
         .key = {"shard-block-size"},
         .type = GF_OPTION_TYPE_SIZET,
         .op_version = {GD_OP_VERSION_3_7_0},
@@ -6861,4 +6869,18 @@ struct volume_options options[] = {
                        "internal metadata",
     },
     {.key = {NULL}},
+};
+
+xlator_api_t xlator_api = {
+    .init = init,
+    .fini = fini,
+    .reconfigure = reconfigure,
+    .mem_acct_init = mem_acct_init,
+    .op_version = {1}, /* Present from the initial version */
+    .dumpops = &dumpops,
+    .fops = &fops,
+    .cbks = &cbks,
+    .options = options,
+    .identifier = "shard",
+    .category = GF_MAINTAINED,
 };

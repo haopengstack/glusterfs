@@ -7,13 +7,13 @@
    later), or the GNU General Public License, version 2 (GPLv2), in all
    cases as published by the Free Software Foundation.
 */
-#include "glusterfs.h"
-#include "compat.h"
-#include "xlator.h"
-#include "logging.h"
-#include "common-utils.h"
-#include "list.h"
-#include "upcall-utils.h"
+#include <glusterfs/glusterfs.h>
+#include <glusterfs/compat.h>
+#include <glusterfs/xlator.h>
+#include <glusterfs/logging.h>
+#include <glusterfs/common-utils.h>
+#include <glusterfs/list.h>
+#include <glusterfs/upcall-utils.h>
 
 #include "locks.h"
 #include "clear.h"
@@ -691,31 +691,35 @@ pl_inodelk_client_cleanup(xlator_t *this, pl_ctx_t *ctx)
     }
     pthread_mutex_unlock(&ctx->lock);
 
-    list_for_each_entry_safe(l, tmp, &unwind, client_list)
-    {
-        list_del_init(&l->client_list);
+    if (!list_empty(&unwind)) {
+        list_for_each_entry_safe(l, tmp, &unwind, client_list)
+        {
+            list_del_init(&l->client_list);
 
-        if (l->frame)
-            STACK_UNWIND_STRICT(inodelk, l->frame, -1, EAGAIN, NULL);
-        list_add_tail(&l->client_list, &released);
+            if (l->frame)
+                STACK_UNWIND_STRICT(inodelk, l->frame, -1, EAGAIN, NULL);
+            list_add_tail(&l->client_list, &released);
+        }
     }
 
-    list_for_each_entry_safe(l, tmp, &released, client_list)
-    {
-        list_del_init(&l->client_list);
-
-        pl_inode = l->pl_inode;
-
-        dom = get_domain(pl_inode, l->volume);
-
-        grant_blocked_inode_locks(this, pl_inode, dom, &now, pcontend);
-
-        pthread_mutex_lock(&pl_inode->mutex);
+    if (!list_empty(&released)) {
+        list_for_each_entry_safe(l, tmp, &released, client_list)
         {
-            __pl_inodelk_unref(l);
+            list_del_init(&l->client_list);
+
+            pl_inode = l->pl_inode;
+
+            dom = get_domain(pl_inode, l->volume);
+
+            grant_blocked_inode_locks(this, pl_inode, dom, &now, pcontend);
+
+            pthread_mutex_lock(&pl_inode->mutex);
+            {
+                __pl_inodelk_unref(l);
+            }
+            pthread_mutex_unlock(&pl_inode->mutex);
+            inode_unref(pl_inode->inode);
         }
-        pthread_mutex_unlock(&pl_inode->mutex);
-        inode_unref(pl_inode->inode);
     }
 
     if (pcontend != NULL) {

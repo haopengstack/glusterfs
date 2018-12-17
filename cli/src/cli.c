@@ -44,19 +44,19 @@
 #include "cli-cmd.h"
 #include "cli-mem-types.h"
 
-#include "xlator.h"
-#include "glusterfs.h"
-#include "compat.h"
-#include "logging.h"
-#include "dict.h"
-#include "list.h"
-#include "timer.h"
-#include "stack.h"
-#include "revision.h"
-#include "common-utils.h"
-#include "gf-event.h"
-#include "syscall.h"
-#include "call-stub.h"
+#include <glusterfs/xlator.h>
+#include <glusterfs/glusterfs.h>
+#include <glusterfs/compat.h>
+#include <glusterfs/logging.h>
+#include <glusterfs/dict.h>
+#include <glusterfs/list.h>
+#include <glusterfs/timer.h>
+#include <glusterfs/stack.h>
+#include <glusterfs/revision.h>
+#include <glusterfs/common-utils.h>
+#include <glusterfs/gf-event.h>
+#include <glusterfs/syscall.h>
+#include <glusterfs/call-stub.h>
 #include <fnmatch.h>
 
 #include "xdr-generic.h"
@@ -320,6 +320,20 @@ cli_opt_parse(char *opt, struct cli_state *state)
 
     if (strcmp(opt, "") == 0)
         return 1;
+    if (strcmp(opt, "help") == 0) {
+        cli_out(
+            " peer help                - display help for peer commands\n"
+            " volume help              - display help for volume commands\n"
+            " volume bitrot help       - display help for volume"
+            " bitrot commands\n"
+            " volume quota help        - display help for volume"
+            " quota commands\n"
+            " volume tier help         - display help for volume"
+            " tier commands\n"
+            " snapshot help            - display help for snapshot commands\n"
+            " global help              - list global commands\n");
+        exit(0);
+    }
 
     if (strcmp(opt, "version") == 0) {
         cli_out("%s", argp_program_version);
@@ -342,6 +356,11 @@ cli_opt_parse(char *opt, struct cli_state *state)
 #else
         cli_err("XML output not supported. Ignoring '--xml' option");
 #endif
+        return 0;
+    }
+
+    if (strcmp(opt, "nolog") == 0) {
+        state->mode |= GLUSTER_MODE_GLFSHEAL_NOLOG;
         return 0;
     }
 
@@ -449,7 +468,8 @@ parse_cmdline(int argc, char *argv[], struct cli_state *state)
             continue;
         ret = cli_opt_parse(opt, state);
         if (ret == -1) {
-            cli_out("unrecognized option --%s", opt);
+            cli_out("unrecognized option --%s\n", opt);
+            usage();
             return ret;
         } else if (ret == -2) {
             return ret;

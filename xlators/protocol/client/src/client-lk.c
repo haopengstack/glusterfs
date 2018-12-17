@@ -8,10 +8,10 @@
   cases as published by the Free Software Foundation.
 */
 
-#include "common-utils.h"
-#include "xlator.h"
+#include <glusterfs/common-utils.h>
+#include <glusterfs/xlator.h>
 #include "client.h"
-#include "lkowner.h"
+#include <glusterfs/lkowner.h>
 #include "client-messages.h"
 
 static void
@@ -360,10 +360,12 @@ delete_granted_locks_owner(fd_t *fd, gf_lkowner_t *owner)
 
     pthread_spin_unlock(&conf->fd_lock);
 
-    list_for_each_entry_safe(lock, tmp, &delete_list, list)
-    {
-        list_del_init(&lock->list);
-        destroy_client_lock(lock);
+    if (!list_empty(&delete_list)) {
+        list_for_each_entry_safe(lock, tmp, &delete_list, list)
+        {
+            list_del_init(&lock->list);
+            destroy_client_lock(lock);
+        }
     }
 
     /* FIXME: Need to actually print the locks instead of count */

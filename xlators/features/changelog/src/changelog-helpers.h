@@ -11,14 +11,14 @@
 #ifndef _CHANGELOG_HELPERS_H
 #define _CHANGELOG_HELPERS_H
 
-#include "locking.h"
-#include "timer.h"
+#include <glusterfs/locking.h>
+#include <glusterfs/timer.h>
 #include "pthread.h"
-#include "iobuf.h"
-#include "rot-buffs.h"
+#include <glusterfs/iobuf.h>
+#include <glusterfs/rot-buffs.h>
 
 #include "changelog-misc.h"
-#include "call-stub.h"
+#include <glusterfs/call-stub.h>
 
 #include "rpcsvc.h"
 #include "changelog-ev-handle.h"
@@ -307,6 +307,24 @@ struct changelog_priv {
 
     /* glusterfind dependency to capture paths on deleted entries*/
     gf_boolean_t capture_del_path;
+
+    /* Save total no. of listners */
+    gf_atomic_t listnercnt;
+
+    /* Save total no. of xprt are associated with listner */
+    gf_atomic_t xprtcnt;
+
+    /* Save xprt list */
+    struct list_head xprt_list;
+
+    /* Save total no. of client connection */
+    gf_atomic_t clntcnt;
+
+    /* Save cleanup brick in victim */
+    xlator_t *victim;
+
+    /* Status to save cleanup notify status */
+    gf_boolean_t notify_down;
 };
 
 struct changelog_local {

@@ -11,10 +11,10 @@
 #define __CLI_H__
 
 #include "rpc-clnt.h"
-#include "glusterfs.h"
+#include <glusterfs/glusterfs.h>
 #include "protocol-common.h"
-#include "logging.h"
-#include "quota-common-utils.h"
+#include <glusterfs/logging.h>
+#include <glusterfs/quota-common-utils.h>
 
 #include "cli1-xdr.h"
 
@@ -61,6 +61,7 @@ typedef enum {
 #define GLUSTER_MODE_XML (1 << 2)
 #define GLUSTER_MODE_WIGNORE (1 << 3)
 #define GLUSTER_MODE_WIGNORE_PARTITION (1 << 4)
+#define GLUSTER_MODE_GLFSHEAL_NOLOG (1 << 5)
 
 #define GLUSTERD_GET_QUOTA_LIST_MOUNT_PATH(abspath, volname, path)             \
     do {                                                                       \
@@ -235,6 +236,19 @@ _cli_err(const char *fmt, ...);
         FMT_WARN(fmt);                                                         \
                                                                                \
         _cli_err(fmt);                                                         \
+                                                                               \
+    } while (0)
+
+#define usage()                                                                \
+    do {                                                                       \
+        cli_out(                                                               \
+            " Usage: gluster [options] <help> <peer>"                          \
+            " <pool> <volume>\n"                                               \
+            " Options:\n"                                                      \
+            " --help  Shows the help information\n"                            \
+            " --version  Shows the version\n"                                  \
+            " --print-logdir  Shows the log directory\n"                       \
+            " --print-statedumpdir Shows the state dump directory\n");         \
                                                                                \
     } while (0)
 

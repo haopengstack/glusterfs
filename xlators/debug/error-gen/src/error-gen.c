@@ -7,10 +7,10 @@
    later), or the GNU General Public License, version 2 (GPLv2), in all
    cases as published by the Free Software Foundation.
 */
-#include "xlator.h"
+#include <glusterfs/xlator.h>
 #include "error-gen.h"
-#include "statedump.h"
-#include "defaults.h"
+#include <glusterfs/statedump.h>
+#include <glusterfs/defaults.h>
 
 /*
  * The user can specify an error probability as a float percentage, but we
@@ -1644,4 +1644,19 @@ struct volume_options options[] = {
         .flags = OPT_FLAG_SETTABLE,
     },
 
-    {.key = {NULL}}};
+    {.key = {NULL}},
+};
+
+xlator_api_t xlator_api = {
+    .init = init,
+    .fini = fini,
+    .reconfigure = reconfigure,
+    .mem_acct_init = mem_acct_init,
+    .op_version = {1},
+    .dumpops = &dumpops,
+    .fops = &fops,
+    .cbks = &cbks,
+    .options = options,
+    .identifier = "error-gen",
+    .category = GF_TECH_PREVIEW,
+};

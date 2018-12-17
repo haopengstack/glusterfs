@@ -24,12 +24,12 @@
  */
 
 #include <math.h>
-#include "glusterfs.h"
-#include "xlator.h"
-#include "call-stub.h"
+#include <glusterfs/glusterfs.h>
+#include <glusterfs/xlator.h>
+#include <glusterfs/call-stub.h>
 #include "readdir-ahead.h"
 #include "readdir-ahead-mem-types.h"
-#include "defaults.h"
+#include <glusterfs/defaults.h>
 #include "readdir-ahead-messages.h"
 static int
 rda_fill_fd(call_frame_t *, xlator_t *, fd_t *);
@@ -145,7 +145,8 @@ __rda_inode_ctx_update_iatts(inode_t *inode, xlator_t *this,
                 goto out;
             }
         } else {
-            if (generation != GF_ATOMIC_GET(ctx_p->generation))
+            if ((generation != -1) &&
+                (generation != GF_ATOMIC_GET(ctx_p->generation)))
                 goto out;
         }
 
@@ -199,6 +200,60 @@ rda_reset_ctx(xlator_t *this, struct rda_fd_ctx *ctx)
         dict_unref(ctx->xattrs);
         ctx->xattrs = NULL;
     }
+}
+
+static void
+rda_mark_inode_dirty(xlator_t *this, inode_t *inode)
+{
+    inode_t *parent = NULL;
+    fd_t *fd = NULL;
+    uint64_t val = 0;
+    int32_t ret = 0;
+    struct rda_fd_ctx *fd_ctx = NULL;
+    char gfid[GF_UUID_BUF_SIZE] = {0};
+
+    parent = inode_parent(inode, NULL, NULL);
+    if (parent) {
+        LOCK(&parent->lock);
+        {
+            list_for_each_entry(fd, &parent->fd_list, inode_list)
+            {
+                val = 0;
+                fd_ctx_get(fd, this, &val);
+                if (val == 0)
+                    continue;
+
+                fd_ctx = (void *)val;
+                uuid_utoa_r(inode->gfid, gfid);
+                if (!GF_ATOMIC_GET(fd_ctx->prefetching))
+                    continue;
+
+                LOCK(&fd_ctx->lock);
+                {
+                    if (GF_ATOMIC_GET(fd_ctx->prefetching)) {
+                        if (fd_ctx->writes_during_prefetch == NULL)
+                            fd_ctx->writes_during_prefetch = dict_new();
+
+                        ret = dict_set_int8(fd_ctx->writes_during_prefetch,
+                                            gfid, 1);
+                        if (ret < 0) {
+                            gf_log(this->name, GF_LOG_WARNING,
+                                   "marking to invalidate stats of %s from an "
+                                   "in progress "
+                                   "prefetching has failed, might result in "
+                                   "stale stat to "
+                                   "application",
+                                   gfid);
+                        }
+                    }
+                }
+                UNLOCK(&fd_ctx->lock);
+            }
+        }
+        UNLOCK(&parent->lock);
+    }
+
+    return;
 }
 
 /*
@@ -433,6 +488,10 @@ rda_fill_fd_cbk(call_frame_t *frame, void *cookie, xlator_t *this,
     int ret = 0;
     gf_boolean_t serve = _gf_false;
     call_stub_t *stub = NULL;
+    char gfid[GF_UUID_BUF_SIZE] = {
+        0,
+    };
+    uint64_t generation = 0;
 
     INIT_LIST_HEAD(&serve_entries.list);
     LOCK(&ctx->lock);
@@ -460,8 +519,16 @@ rda_fill_fd_cbk(call_frame_t *frame, void *cookie, xlator_t *this,
                  * request was initiated. So, we pass 0 for
                  * generation number
                  */
+                generation = -1;
+                if (ctx->writes_during_prefetch) {
+                    memset(gfid, 0, sizeof(gfid));
+                    uuid_utoa_r(dirent->inode->gfid, gfid);
+                    if (dict_get(ctx->writes_during_prefetch, gfid))
+                        generation = 0;
+                }
+
                 rda_inode_ctx_update_iatts(dirent->inode, this, &dirent->d_stat,
-                                           &dirent->d_stat, 0);
+                                           &dirent->d_stat, generation);
             }
 
             dirent_size = gf_dirent_size(dirent->d_name);
@@ -473,6 +540,13 @@ rda_fill_fd_cbk(call_frame_t *frame, void *cookie, xlator_t *this,
             ctx->next_offset = dirent->d_off;
         }
     }
+
+    if (ctx->writes_during_prefetch) {
+        dict_unref(ctx->writes_during_prefetch);
+        ctx->writes_during_prefetch = NULL;
+    }
+
+    GF_ATOMIC_DEC(ctx->prefetching);
 
     if (ctx->cur_size >= priv->rda_high_wmark)
         ctx->state &= ~RDA_FD_PLUGGED;
@@ -603,6 +677,7 @@ rda_fill_fd(call_frame_t *frame, xlator_t *this, fd_t *fd)
     }
 
     local->offset = offset;
+    GF_ATOMIC_INC(ctx->prefetching);
 
     UNLOCK(&ctx->lock);
 
@@ -638,18 +713,10 @@ rda_opendir(call_frame_t *frame, xlator_t *this, loc_t *loc, fd_t *fd,
 {
     int op_errno = 0;
     struct rda_local *local = NULL;
-    dict_t *xdata_from_req = NULL;
 
     if (xdata) {
-        xdata_from_req = dict_new();
-        if (!xdata_from_req) {
-            op_errno = ENOMEM;
-            goto unwind;
-        }
-
         local = mem_get0(this->local_pool);
         if (!local) {
-            dict_unref(xdata_from_req);
             op_errno = ENOMEM;
             goto unwind;
         }
@@ -685,6 +752,9 @@ rda_writev_cbk(call_frame_t *frame, void *cookie, xlator_t *this,
         goto unwind;
 
     local = frame->local;
+
+    rda_mark_inode_dirty(this, local->inode);
+
     rda_inode_ctx_update_iatts(local->inode, this, postbuf, &postbuf_out,
                                local->generation);
 
@@ -720,6 +790,7 @@ rda_fallocate_cbk(call_frame_t *frame, void *cookie, xlator_t *this,
         goto unwind;
 
     local = frame->local;
+    rda_mark_inode_dirty(this, local->inode);
     rda_inode_ctx_update_iatts(local->inode, this, postbuf, &postbuf_out,
                                local->generation);
 
@@ -755,6 +826,7 @@ rda_zerofill_cbk(call_frame_t *frame, void *cookie, xlator_t *this,
         goto unwind;
 
     local = frame->local;
+    rda_mark_inode_dirty(this, local->inode);
     rda_inode_ctx_update_iatts(local->inode, this, postbuf, &postbuf_out,
                                local->generation);
 
@@ -790,6 +862,7 @@ rda_discard_cbk(call_frame_t *frame, void *cookie, xlator_t *this,
         goto unwind;
 
     local = frame->local;
+    rda_mark_inode_dirty(this, local->inode);
     rda_inode_ctx_update_iatts(local->inode, this, postbuf, &postbuf_out,
                                local->generation);
 
@@ -824,6 +897,7 @@ rda_ftruncate_cbk(call_frame_t *frame, void *cookie, xlator_t *this,
         goto unwind;
 
     local = frame->local;
+    rda_mark_inode_dirty(this, local->inode);
     rda_inode_ctx_update_iatts(local->inode, this, postbuf, &postbuf_out,
                                local->generation);
 
@@ -859,6 +933,7 @@ rda_truncate_cbk(call_frame_t *frame, void *cookie, xlator_t *this,
         goto unwind;
 
     local = frame->local;
+    rda_mark_inode_dirty(this, local->inode);
     rda_inode_ctx_update_iatts(local->inode, this, postbuf, &postbuf_out,
                                local->generation);
     if (postbuf_out.ia_ctime == 0)
@@ -889,7 +964,7 @@ rda_setxattr_cbk(call_frame_t *frame, void *cookie, xlator_t *this,
         goto unwind;
 
     local = frame->local;
-
+    rda_mark_inode_dirty(this, local->inode);
     rda_inode_ctx_update_iatts(local->inode, this, NULL, NULL,
                                local->generation);
 unwind:
@@ -916,7 +991,7 @@ rda_fsetxattr_cbk(call_frame_t *frame, void *cookie, xlator_t *this,
         goto unwind;
 
     local = frame->local;
-
+    rda_mark_inode_dirty(this, local->inode);
     rda_inode_ctx_update_iatts(local->inode, this, NULL, NULL,
                                local->generation);
 unwind:
@@ -947,6 +1022,7 @@ rda_setattr_cbk(call_frame_t *frame, void *cookie, xlator_t *this,
         goto unwind;
 
     local = frame->local;
+    rda_mark_inode_dirty(this, local->inode);
     rda_inode_ctx_update_iatts(local->inode, this, statpost, &postbuf_out,
                                local->generation);
     if (postbuf_out.ia_ctime == 0)
@@ -981,6 +1057,7 @@ rda_fsetattr_cbk(call_frame_t *frame, void *cookie, xlator_t *this,
         goto unwind;
 
     local = frame->local;
+    rda_mark_inode_dirty(this, local->inode);
     rda_inode_ctx_update_iatts(local->inode, this, statpost, &postbuf_out,
                                local->generation);
     if (postbuf_out.ia_ctime == 0)
@@ -1011,7 +1088,7 @@ rda_removexattr_cbk(call_frame_t *frame, void *cookie, xlator_t *this,
         goto unwind;
 
     local = frame->local;
-
+    rda_mark_inode_dirty(this, local->inode);
     rda_inode_ctx_update_iatts(local->inode, this, NULL, NULL,
                                local->generation);
 unwind:
@@ -1038,7 +1115,7 @@ rda_fremovexattr_cbk(call_frame_t *frame, void *cookie, xlator_t *this,
         goto unwind;
 
     local = frame->local;
-
+    rda_mark_inode_dirty(this, local->inode);
     rda_inode_ctx_update_iatts(local->inode, this, NULL, NULL,
                                local->generation);
 unwind:
@@ -1230,6 +1307,14 @@ struct xlator_cbks cbks = {
 
 struct volume_options options[] = {
     {
+        .key = {"readdir-ahead"},
+        .type = GF_OPTION_TYPE_BOOL,
+        .default_value = "off",
+        .description = "enable/disable readdir-ahead",
+        .op_version = {GD_OP_VERSION_6_0},
+        .flags = OPT_FLAG_SETTABLE,
+    },
+    {
         .key = {"rda-request-size"},
         .type = GF_OPTION_TYPE_SIZET,
         .min = 4096,
@@ -1284,4 +1369,17 @@ struct volume_options options[] = {
      .tags = {"readdir-ahead"},
      .description = "Enable/Disable readdir ahead translator"},
     {.key = {NULL}},
+};
+
+xlator_api_t xlator_api = {
+    .init = init,
+    .fini = fini,
+    .reconfigure = reconfigure,
+    .mem_acct_init = mem_acct_init,
+    .op_version = {1}, /* Present from the initial version */
+    .fops = &fops,
+    .cbks = &cbks,
+    .options = options,
+    .identifier = "readdir-ahead",
+    .category = GF_MAINTAINED,
 };

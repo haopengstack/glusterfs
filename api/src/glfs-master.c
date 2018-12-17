@@ -15,8 +15,8 @@
 #include <inttypes.h>
 #include <limits.h>
 
-#include "xlator.h"
-#include "glusterfs.h"
+#include <glusterfs/xlator.h>
+#include <glusterfs/glusterfs.h>
 
 #include "glfs-internal.h"
 #include "glfs-mem-types.h"
@@ -169,6 +169,21 @@ struct xlator_dumpops dumpops;
 
 struct xlator_fops fops;
 
-struct xlator_cbks cbks = {.forget = glfs_forget,
-                           .release = glfs_release,
-                           .releasedir = glfs_releasedir};
+struct xlator_cbks cbks = {
+    .forget = glfs_forget,
+    .release = glfs_release,
+    .releasedir = glfs_releasedir,
+};
+
+xlator_api_t xlator_api = {
+    .init = init,
+    .fini = fini,
+    .notify = notify,
+    .mem_acct_init = mem_acct_init,
+    .op_version = {1},
+    .dumpops = &dumpops,
+    .fops = &fops,
+    .cbks = &cbks,
+    .identifier = "glfs-api",
+    .category = GF_MAINTAINED,
+};

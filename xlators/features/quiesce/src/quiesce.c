@@ -8,8 +8,8 @@
    cases as published by the Free Software Foundation.
 */
 #include "quiesce.h"
-#include "defaults.h"
-#include "call-stub.h"
+#include <glusterfs/defaults.h>
+#include <glusterfs/call-stub.h>
 
 /* TODO: */
 /* Think about 'writev/_*_lk/setattr/xattrop/' fops to do re-transmittion */
@@ -2663,4 +2663,19 @@ struct volume_options options[] = {
                     "the gfproxy daemons are running, to which the "
                     "the thin clients can failover to."},
     {.key = {NULL}},
+};
+
+xlator_api_t xlator_api = {
+    .init = init,
+    .fini = fini,
+    .notify = notify,
+    .reconfigure = reconfigure,
+    .mem_acct_init = mem_acct_init,
+    .op_version = {GD_OP_VERSION_3_12_0},
+    .dumpops = &dumpops,
+    .fops = &fops,
+    .cbks = &cbks,
+    .options = options,
+    .identifier = "quiesce",
+    .category = GF_TECH_PREVIEW,
 };

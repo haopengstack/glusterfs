@@ -11,7 +11,7 @@
 #ifndef _POSIX_MESSAGES_H_
 #define _POSIX_MESSAGES_H_
 
-#include "glfs-message-id.h"
+#include <glusterfs/glfs-message-id.h>
 
 /* To add new message IDs, append new identifiers at the end of the list.
  *
@@ -67,6 +67,7 @@ GLFS_MSGID(POSIX, P_MSG_XATTR_FAILED, P_MSG_NULL_GFID, P_MSG_FCNTL_FAILED,
            P_MSG_ANCESTORY_FAILED, P_MSG_DISK_SPACE_CHECK_FAILED,
            P_MSG_FALLOCATE_FAILED, P_MSG_STOREMDATA_FAILED,
            P_MSG_FETCHMDATA_FAILED, P_MSG_GETMDATA_FAILED,
-           P_MSG_SETMDATA_FAILED, P_MSG_FRESHFILE);
+           P_MSG_SETMDATA_FAILED, P_MSG_FRESHFILE, P_MSG_MUTEX_FAILED,
+           P_MSG_COPY_FILE_RANGE_FAILED);
 
 #endif /* !_GLUSTERD_MESSAGES_H_ */

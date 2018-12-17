@@ -7,10 +7,10 @@
    later), or the GNU General Public License, version 2 (GPLv2), in all
    cases as published by the Free Software Foundation.
 */
-#include "common-utils.h"
+#include <glusterfs/common-utils.h>
 #include "cli1-xdr.h"
 #include "xdr-generic.h"
-#include "glusterfs.h"
+#include <glusterfs/glusterfs.h>
 #include "glusterd.h"
 #include "glusterd-op-sm.h"
 #include "glusterd-geo-rep.h"
@@ -23,8 +23,8 @@
 #include "glusterd-messages.h"
 #include "glusterd-server-quorum.h"
 #include "glusterd-mgmt.h"
-#include "run.h"
-#include "syscall.h"
+#include <glusterfs/run.h>
+#include <glusterfs/syscall.h>
 
 #include <signal.h>
 
@@ -268,7 +268,7 @@ glusterd_op_stage_replace_brick(dict_t *dict, char **op_errstr,
     }
 
     if (!gf_is_local_addr(host)) {
-        rcu_read_lock();
+        RCU_READ_LOCK;
 
         peerinfo = glusterd_peerinfo_find(NULL, host);
         if (peerinfo == NULL) {
@@ -292,7 +292,7 @@ glusterd_op_stage_replace_brick(dict_t *dict, char **op_errstr,
             *op_errstr = gf_strdup(msg);
             ret = -1;
         }
-        rcu_read_unlock();
+        RCU_READ_UNLOCK;
 
         if (ret)
             goto out;

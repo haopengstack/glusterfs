@@ -53,32 +53,32 @@
 #endif
 #endif
 
-#include "xlator.h"
-#include "glusterfs.h"
-#include "compat.h"
-#include "logging.h"
+#include <glusterfs/xlator.h>
+#include <glusterfs/glusterfs.h>
+#include <glusterfs/compat.h>
+#include <glusterfs/logging.h>
 #include "glusterfsd-messages.h"
-#include "dict.h"
-#include "list.h"
-#include "timer.h"
+#include <glusterfs/dict.h>
+#include <glusterfs/list.h>
+#include <glusterfs/timer.h>
 #include "glusterfsd.h"
-#include "revision.h"
-#include "common-utils.h"
-#include "gf-event.h"
-#include "statedump.h"
-#include "latency.h"
+#include <glusterfs/revision.h>
+#include <glusterfs/common-utils.h>
+#include <glusterfs/gf-event.h>
+#include <glusterfs/statedump.h>
+#include <glusterfs/latency.h>
 #include "glusterfsd-mem-types.h"
-#include "syscall.h"
-#include "call-stub.h"
+#include <glusterfs/syscall.h>
+#include <glusterfs/call-stub.h>
 #include <fnmatch.h>
 #include "rpc-clnt.h"
-#include "syncop.h"
-#include "client_t.h"
+#include <glusterfs/syncop.h>
+#include <glusterfs/client_t.h>
 #include "netgroups.h"
 #include "exports.h"
-#include "monitoring.h"
+#include <glusterfs/monitoring.h>
 
-#include "daemon.h"
+#include <glusterfs/daemon.h>
 
 /* using argp for command line parsing */
 static char gf_doc[] = "";
@@ -219,6 +219,9 @@ static struct argp_option gf_options[] = {
      "[default: 300]"},
     {"resolve-gids", ARGP_RESOLVE_GIDS_KEY, 0, 0,
      "Resolve all auxiliary groups in fuse translator (max 32 otherwise)"},
+    {"lru-limit", ARGP_FUSE_LRU_LIMIT_KEY, "N", 0,
+     "Set fuse module's limit for number of inodes kept in LRU list to N "
+     "[default: 0]"},
     {"background-qlen", ARGP_FUSE_BACKGROUND_QLEN_KEY, "N", 0,
      "Set fuse module's background queue length to N "
      "[default: 64]"},
@@ -492,6 +495,15 @@ set_fuse_mount_options(glusterfs_ctx_t *ctx, dict_t *options)
             gf_msg("glusterfsd", GF_LOG_ERROR, 0, glusterfsd_msg_4,
                    "failed to set dict value for key "
                    "resolve-gids");
+            goto err;
+        }
+    }
+
+    if (cmd_args->lru_limit >= 0) {
+        ret = dict_set_int32(options, "lru-limit", cmd_args->lru_limit);
+        if (ret < 0) {
+            gf_msg("glusterfsd", GF_LOG_ERROR, 0, glusterfsd_msg_4,
+                   "lru-limit");
             goto err;
         }
     }
@@ -1257,6 +1269,13 @@ parse_opts(int key, char *arg, struct argp_state *state)
             cmd_args->resolve_gids = 1;
             break;
 
+        case ARGP_FUSE_LRU_LIMIT_KEY:
+            if (!gf_string2int32(arg, &cmd_args->lru_limit))
+                break;
+
+            argp_failure(state, -1, 0, "unknown LRU limit option %s", arg);
+            break;
+
         case ARGP_FUSE_BACKGROUND_QLEN_KEY:
             if (!gf_string2int(arg, &cmd_args->background_qlen))
                 break;
@@ -1525,43 +1544,44 @@ cleanup_and_exit(int signum)
 
     if (ctx->cleanup_started)
         return;
+    pthread_mutex_lock(&ctx->cleanup_lock);
+    {
+        ctx->cleanup_started = 1;
 
-    ctx->cleanup_started = 1;
-
-    /* signout should be sent to all the bricks in case brick mux is enabled
-     * and multiple brick instances are attached to this process
-     */
-    if (ctx->active) {
-        top = ctx->active->first;
-        for (trav_p = &top->children; *trav_p; trav_p = &(*trav_p)->next) {
-            victim = (*trav_p)->xlator;
-            rpc_clnt_mgmt_pmap_signout(ctx, victim->name);
+        /* signout should be sent to all the bricks in case brick mux is enabled
+         * and multiple brick instances are attached to this process
+         */
+        if (ctx->active) {
+            top = ctx->active->first;
+            for (trav_p = &top->children; *trav_p; trav_p = &(*trav_p)->next) {
+                victim = (*trav_p)->xlator;
+                rpc_clnt_mgmt_pmap_signout(ctx, victim->name);
+            }
+        } else {
+            rpc_clnt_mgmt_pmap_signout(ctx, NULL);
         }
-    } else {
-        rpc_clnt_mgmt_pmap_signout(ctx, NULL);
-    }
 
-    /* below part is a racy code where the rpcsvc object is freed.
-     * But in another thread (epoll thread), upon poll error in the
-     * socket the transports are cleaned up where again rpcsvc object
-     * is accessed (which is already freed by the below function).
-     * Since the process is about to be killed don't execute the function
-     * below.
-     */
-    /* if (ctx->listener) { */
-    /*         (void) glusterfs_listener_stop (ctx); */
-    /* } */
+        /* below part is a racy code where the rpcsvc object is freed.
+         * But in another thread (epoll thread), upon poll error in the
+         * socket the transports are cleaned up where again rpcsvc object
+         * is accessed (which is already freed by the below function).
+         * Since the process is about to be killed don't execute the function
+         * below.
+         */
+        /* if (ctx->listener) { */
+        /*         (void) glusterfs_listener_stop (ctx); */
+        /* } */
 
-    /* Call fini() of FUSE xlator first:
-     * so there are no more requests coming and
-     * 'umount' of mount point is done properly */
-    trav = ctx->master;
-    if (trav && trav->fini) {
-        THIS = trav;
-        trav->fini(trav);
-    }
+        /* Call fini() of FUSE xlator first:
+         * so there are no more requests coming and
+         * 'umount' of mount point is done properly */
+        trav = ctx->master;
+        if (trav && trav->fini) {
+            THIS = trav;
+            trav->fini(trav);
+        }
 
-    glusterfs_pidfile_cleanup(ctx);
+        glusterfs_pidfile_cleanup(ctx);
 
 #if 0
         /* TODO: Properly do cleanup_and_exit(), with synchronization */
@@ -1572,8 +1592,9 @@ cleanup_and_exit(int signum)
         }
 #endif
 
-    trav = NULL;
-
+        trav = NULL;
+    }
+    pthread_mutex_unlock(&ctx->cleanup_lock);
     /* NOTE: Only the least significant 8 bits i.e (signum & 255)
        will be available to parent process on calling exit() */
     exit(abs(signum));
@@ -1743,6 +1764,7 @@ glusterfs_ctx_defaults_init(glusterfs_ctx_t *ctx)
         goto out;
 
     pthread_mutex_init(&ctx->notify_lock, NULL);
+    pthread_mutex_init(&ctx->cleanup_lock, NULL);
     pthread_cond_init(&ctx->notify_cond, NULL);
 
     ctx->clienttable = gf_clienttable_alloc();
@@ -2081,6 +2103,11 @@ parse_cmdline(int argc, char *argv[], glusterfs_ctx_t *ctx)
         cmd_args->secure_mgmt = 1;
         ctx->ssl_cert_depth = glusterfs_read_secure_access_file();
     }
+
+    /* Need to set lru_limit to below 0 to indicate there was nothing
+       specified. This is needed as 0 is a valid option, and may not be
+       default value. */
+    cmd_args->lru_limit = -1;
 
     argp_parse(&argp, argc, argv, ARGP_IN_ORDER, NULL, cmd_args);
 
@@ -2538,11 +2565,32 @@ out:
 #endif
 
 int
+glusterfs_graph_fini(glusterfs_graph_t *graph)
+{
+    xlator_t *trav = NULL;
+
+    trav = graph->first;
+
+    while (trav) {
+        if (trav->init_succeeded) {
+            trav->fini(trav);
+            trav->init_succeeded = 0;
+        }
+        trav = trav->next;
+    }
+
+    return 0;
+}
+
+int
 glusterfs_process_volfp(glusterfs_ctx_t *ctx, FILE *fp)
 {
     glusterfs_graph_t *graph = NULL;
     int ret = -1;
     xlator_t *trav = NULL;
+
+    if (!ctx)
+        return -1;
 
     graph = glusterfs_graph_construct(fp);
     if (!graph) {
@@ -2584,8 +2632,25 @@ out:
         fclose(fp);
 
     if (ret) {
-        if (graph && (ctx && (ctx->active != graph)))
-            glusterfs_graph_destroy(graph);
+        /* TODO This code makes to generic for all graphs
+           client as well as servers.For now it destroys
+           graph only for server-side xlators not for client-side
+           xlators, before destroying a graph call xlator fini for
+           xlators those call xlator_init to avoid leak
+        */
+        if (graph) {
+            xl = graph->first;
+            if ((ctx->active != graph) &&
+                (xl && !strcmp(xl->type, "protocol/server"))) {
+                /* Take dict ref for every graph xlator to avoid dict leak
+                   at the time of graph destroying
+                */
+                gluster_graph_take_reference(graph->first);
+                glusterfs_graph_fini(graph);
+                glusterfs_graph_destroy(graph);
+            }
+        }
+
         /* there is some error in setting up the first graph itself */
         if (!ctx->active) {
             emancipate(ctx, ret);

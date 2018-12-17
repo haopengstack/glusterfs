@@ -11,13 +11,13 @@
 #define _GLUSTERD_OP_SM_H_
 
 #include <pthread.h>
-#include "compat-uuid.h"
+#include <glusterfs/compat-uuid.h>
 
-#include "glusterfs.h"
-#include "xlator.h"
-#include "logging.h"
-#include "call-stub.h"
-#include "byte-order.h"
+#include <glusterfs/glusterfs.h>
+#include <glusterfs/xlator.h>
+#include <glusterfs/logging.h>
+#include <glusterfs/call-stub.h>
+#include <glusterfs/byte-order.h>
 #include "glusterd.h"
 #include "protocol-common.h"
 #include "glusterd-hooks.h"
@@ -311,4 +311,10 @@ glusterd_dict_set_volid(dict_t *dict, char *volname, char **op_errstr);
 
 int32_t
 glusterd_tier_op(xlator_t *this, void *data);
+
+int
+glusterd_op_stats_volume(dict_t *dict, char **op_errstr, dict_t *rsp_dict);
+
+int
+glusterd_op_stage_stats_volume(dict_t *dict, char **op_errstr);
 #endif

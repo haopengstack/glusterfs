@@ -9,13 +9,13 @@
 */
 
 #include <stdarg.h>
-#include "glusterfs.h"
-#include "logging.h"
-#include "iobuf.h"
-#include "statedump.h"
-#include "stack.h"
-#include "common-utils.h"
-#include "syscall.h"
+#include "glusterfs/glusterfs.h"
+#include "glusterfs/logging.h"
+#include "glusterfs/iobuf.h"
+#include "glusterfs/statedump.h"
+#include "glusterfs/stack.h"
+#include "glusterfs/common-utils.h"
+#include "glusterfs/syscall.h"
 
 #ifdef HAVE_MALLOC_H
 #include <malloc.h>
@@ -89,19 +89,19 @@ gf_proc_dump_set_path(char *dump_options_file)
     if (!fp)
         goto out;
 
-    ret = fscanf(fp, "%s", buf);
+    ret = fscanf(fp, "%255s", buf);
 
     while (ret != EOF) {
         key = strtok_r(buf, "=", &saveptr);
         if (!key) {
-            ret = fscanf(fp, "%s", buf);
+            ret = fscanf(fp, "%255s", buf);
             continue;
         }
 
         value = strtok_r(NULL, "=", &saveptr);
 
         if (!value) {
-            ret = fscanf(fp, "%s", buf);
+            ret = fscanf(fp, "%255s", buf);
             continue;
         }
         if (!strcmp(key, "path")) {
@@ -747,19 +747,19 @@ gf_proc_dump_options_init()
     // swallow the errors if setting statedump file path is failed.
     (void)gf_proc_dump_set_path(dump_option_file);
 
-    ret = fscanf(fp, "%s", buf);
+    ret = fscanf(fp, "%255s", buf);
 
     while (ret != EOF) {
         key = strtok_r(buf, "=", &saveptr);
         if (!key) {
-            ret = fscanf(fp, "%s", buf);
+            ret = fscanf(fp, "%255s", buf);
             continue;
         }
 
         value = strtok_r(NULL, "=", &saveptr);
 
         if (!value) {
-            ret = fscanf(fp, "%s", buf);
+            ret = fscanf(fp, "%255s", buf);
             continue;
         }
 

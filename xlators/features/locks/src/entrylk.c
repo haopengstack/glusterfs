@@ -7,13 +7,13 @@
    later), or the GNU General Public License, version 2 (GPLv2), in all
    cases as published by the Free Software Foundation.
 */
-#include "glusterfs.h"
-#include "compat.h"
-#include "xlator.h"
-#include "logging.h"
-#include "common-utils.h"
-#include "list.h"
-#include "upcall-utils.h"
+#include <glusterfs/glusterfs.h>
+#include <glusterfs/compat.h>
+#include <glusterfs/xlator.h>
+#include <glusterfs/logging.h>
+#include <glusterfs/common-utils.h>
+#include <glusterfs/list.h>
+#include <glusterfs/upcall-utils.h>
 
 #include "locks.h"
 #include "clear.h"
@@ -644,11 +644,10 @@ int32_t
 check_entrylk_on_basename(xlator_t *this, inode_t *parent, char *basename)
 {
     int32_t entrylk = 0;
-    pl_inode_t *pinode = 0;
     pl_dom_list_t *dom = NULL;
     pl_entry_lock_t *conf = NULL;
 
-    pinode = pl_inode_get(this, parent);
+    pl_inode_t *pinode = pl_inode_get(this, parent);
     if (!pinode)
         goto out;
     pthread_mutex_lock(&pinode->mutex);
@@ -1072,32 +1071,36 @@ pl_entrylk_client_cleanup(xlator_t *this, pl_ctx_t *ctx)
     }
     pthread_mutex_unlock(&ctx->lock);
 
-    list_for_each_entry_safe(l, tmp, &unwind, client_list)
-    {
-        list_del_init(&l->client_list);
+    if (!list_empty(&unwind)) {
+        list_for_each_entry_safe(l, tmp, &unwind, client_list)
+        {
+            list_del_init(&l->client_list);
 
-        if (l->frame)
-            STACK_UNWIND_STRICT(entrylk, l->frame, -1, EAGAIN, NULL);
-        list_add_tail(&l->client_list, &released);
+            if (l->frame)
+                STACK_UNWIND_STRICT(entrylk, l->frame, -1, EAGAIN, NULL);
+            list_add_tail(&l->client_list, &released);
+        }
     }
 
-    list_for_each_entry_safe(l, tmp, &released, client_list)
-    {
-        list_del_init(&l->client_list);
-
-        pinode = l->pinode;
-
-        dom = get_domain(pinode, l->volume);
-
-        grant_blocked_entry_locks(this, pinode, dom, &now, pcontend);
-
-        pthread_mutex_lock(&pinode->mutex);
+    if (!list_empty(&released)) {
+        list_for_each_entry_safe(l, tmp, &released, client_list)
         {
-            __pl_entrylk_unref(l);
-        }
-        pthread_mutex_unlock(&pinode->mutex);
+            list_del_init(&l->client_list);
 
-        inode_unref(pinode->inode);
+            pinode = l->pinode;
+
+            dom = get_domain(pinode, l->volume);
+
+            grant_blocked_entry_locks(this, pinode, dom, &now, pcontend);
+
+            pthread_mutex_lock(&pinode->mutex);
+            {
+                __pl_entrylk_unref(l);
+            }
+            pthread_mutex_unlock(&pinode->mutex);
+
+            inode_unref(pinode->inode);
+        }
     }
 
     if (pcontend != NULL) {

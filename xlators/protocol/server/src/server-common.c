@@ -1,13 +1,13 @@
 #include "server.h"
-#include "defaults.h"
+#include <glusterfs/defaults.h>
 #include "rpc-common-xdr.h"
 #include "glusterfs3-xdr.h"
 #include "glusterfs3.h"
-#include "compat-errno.h"
+#include <glusterfs/compat-errno.h>
 #include "server-messages.h"
 #include "server-helpers.h"
-#include "defaults.h"
-#include "fd.h"
+#include <glusterfs/defaults.h>
+#include <glusterfs/fd.h>
 #include "xdr-nfs3.h"
 
 void
@@ -538,6 +538,16 @@ server4_post_common_3iatt(server_state_t *state, gfx_common_3iatt_rsp *rsp,
     link_inode = inode_link(inode, state->loc.parent, state->loc.name, stbuf);
     inode_lookup(link_inode);
     inode_unref(link_inode);
+}
+
+void
+server4_post_common_3iatt_noinode(gfx_common_3iatt_rsp *rsp, struct iatt *stbuf,
+                                  struct iatt *prebuf_dst,
+                                  struct iatt *postbuf_dst)
+{
+    gfx_stat_from_iattx(&rsp->stat, stbuf);
+    gfx_stat_from_iattx(&rsp->preparent, prebuf_dst);
+    gfx_stat_from_iattx(&rsp->postparent, postbuf_dst);
 }
 
 void

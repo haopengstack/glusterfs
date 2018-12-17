@@ -12,12 +12,12 @@
 #include <sys/uio.h>
 #include <signal.h>
 
-#include "glusterfs.h"
-#include "xlator.h"
-#include "logging.h"
+#include <glusterfs/glusterfs.h>
+#include <glusterfs/xlator.h>
+#include <glusterfs/logging.h>
 #include "changelog.h"
-#include "compat-errno.h"
-#include "call-stub.h"
+#include <glusterfs/compat-errno.h>
+#include <glusterfs/call-stub.h>
 
 #include "bit-rot-stub.h"
 #include "bit-rot-stub-mem-types.h"
@@ -3480,4 +3480,18 @@ struct volume_options options[] = {
      .description = "brick path for versioning",
      .default_value = "{{ brick.path }}"},
     {.key = {NULL}},
+};
+
+xlator_api_t xlator_api = {
+    .init = init,
+    .fini = fini,
+    .notify = notify,
+    .reconfigure = reconfigure,
+    .mem_acct_init = mem_acct_init,
+    .op_version = {1}, /* Present from the initial version */
+    .fops = &fops,
+    .cbks = &cbks,
+    .options = options,
+    .identifier = "bitrot-stub",
+    .category = GF_MAINTAINED,
 };

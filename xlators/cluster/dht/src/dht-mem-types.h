@@ -11,7 +11,7 @@
 #ifndef __DHT_MEM_TYPES_H__
 #define __DHT_MEM_TYPES_H__
 
-#include "mem-types.h"
+#include <glusterfs/mem-types.h>
 
 enum gf_dht_mem_types_ {
     gf_dht_mt_dht_du_t = gf_common_mt_end + 1,
@@ -20,15 +20,12 @@ enum gf_dht_mem_types_ {
     gf_dht_mt_int32_t,
     gf_dht_mt_xlator_t,
     gf_dht_mt_dht_layout_t,
-    gf_switch_mt_dht_conf_t,
-    gf_switch_mt_dht_du_t,
     gf_switch_mt_switch_sched_array,
     gf_switch_mt_switch_struct,
     gf_dht_mt_subvol_time,
     gf_dht_mt_loc_t,
     gf_defrag_info_mt,
     gf_dht_mt_inode_ctx_t,
-    gf_dht_mt_ctx_stat_time_t,
     gf_dht_mt_dirent_t,
     gf_dht_mt_container_t,
     gf_dht_mt_octx_t,

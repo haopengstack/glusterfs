@@ -9,11 +9,11 @@
 */
 
 #include "client.h"
-#include "fd.h"
+#include <glusterfs/fd.h>
 #include "client-messages.h"
 #include "client-common.h"
-#include "compat-errno.h"
-#include "common-utils.h"
+#include <glusterfs/compat-errno.h>
+#include <glusterfs/common-utils.h>
 
 int
 client_fd_lk_list_empty(fd_lk_ctx_t *lk_ctx, gf_boolean_t try_lock)
@@ -2459,6 +2459,20 @@ client_handle_fop_requirements_v2(
                 lease, this, &this_req->compound_req_v2_u.compound_lease_req,
                 op_errno, out, &args->loc, &args->lease, args->xdata);
             break;
+        case GF_FOP_COPY_FILE_RANGE:
+            /*
+             * Not going to handle the copy_file_range fop in compound
+             * operation. This is because, compound operation is going
+             * to be removed. In fact, AFR one of the heavy consumer of
+             * compound operations has stopped using that.
+             * https://github.com/gluster/glusterfs/issues/414
+             * Therefore, sending ENOTSUP error for this fop coming as
+             * comound request. Though, there was no need of handling
+             * "case GF_FOP_COPY_FILE_RANGE" technically, this comment
+             * under the label of GF_FOP_COPY_FILE_RANGE will help in
+             * understanding that this fop does not handle the compund
+             * request and why.
+             */
         default:
             return ENOTSUP;
     }
@@ -2631,6 +2645,14 @@ compound_request_cleanup_v2(gfx_compound_req *req)
             case GF_FOP_SEEK:
                 CLIENT4_COMPOUND_FOP_CLEANUP(curr_req, seek);
                 break;
+            case GF_FOP_COPY_FILE_RANGE:
+                /*
+                 * This fop is not handled in compund operations.
+                 * Check the comment added under this fop's section
+                 * in the compound_request_cleanup_v2. Therefore
+                 * keeping this label only as a placeholder with
+                 * a message that, this fop is not handled.
+                 */
             default:
                 break;
         }
@@ -2889,7 +2911,11 @@ client_process_response_v2(call_frame_t *frame, xlator_t *this,
             gfx_common_dict_rsp *tmp_rsp = NULL;
             tmp_rsp = &this_rsp->compound_rsp_v2_u.compound_getxattr_rsp;
 
-            client_post_common_dict(this, tmp_rsp, &xattr, &xdata);
+            ret = client_post_common_dict(this, tmp_rsp, &xattr, &xdata);
+            if (ret) {
+                tmp_rsp->op_errno = -ret;
+                goto out;
+            }
 
             CLIENT4_POST_FOP_TYPE(getxattr, common_dict, this_rsp,
                                   this_args_cbk, xattr, xdata);
@@ -3000,10 +3026,17 @@ client_process_response_v2(call_frame_t *frame, xlator_t *this,
                                   &this_args_cbk->lease, xdata);
             break;
         }
+        case GF_FOP_COPY_FILE_RANGE:
+            /*
+             * Not handling this fop. Returning ENOTSUP. Check
+             * the comment added for this fop in the function
+             * client_handle_fop_requirements_v2.
+             */
         default:
             return -ENOTSUP;
     }
 
+out:
     if (xdata)
         dict_unref(xdata);
     if (xattr)

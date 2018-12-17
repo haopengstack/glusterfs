@@ -11,11 +11,10 @@
 #ifndef __LEASES_MEM_TYPES_H__
 #define __LEASES_MEM_TYPES_H__
 
-#include "mem-types.h"
+#include <glusterfs/mem-types.h>
 
 enum gf_leases_mem_types_ {
-    gf_leases_mt_conf_t = gf_common_mt_end + 1,
-    gf_leases_mt_private_t,
+    gf_leases_mt_private_t = gf_common_mt_end + 1,
     gf_leases_mt_lease_client_t,
     gf_leases_mt_lease_inode_t,
     gf_leases_mt_fd_ctx_t,

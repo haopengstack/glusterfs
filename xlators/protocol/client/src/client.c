@@ -9,12 +9,12 @@
 */
 
 #include "client.h"
-#include "xlator.h"
-#include "defaults.h"
-#include "glusterfs.h"
-#include "statedump.h"
-#include "compat-errno.h"
-#include "gf-event.h"
+#include <glusterfs/xlator.h>
+#include <glusterfs/defaults.h>
+#include <glusterfs/glusterfs.h>
+#include <glusterfs/statedump.h>
+#include <glusterfs/compat-errno.h>
+#include <glusterfs/gf-event.h>
 
 #include "xdr-rpc.h"
 #include "glusterfs3.h"
@@ -1125,6 +1125,41 @@ client_statfs(call_frame_t *frame, xlator_t *this, loc_t *loc, dict_t *xdata)
 out:
     if (ret)
         STACK_UNWIND_STRICT(statfs, frame, -1, ENOTCONN, NULL, NULL);
+
+    return 0;
+}
+
+int32_t
+client_copy_file_range(call_frame_t *frame, xlator_t *this, fd_t *fd_in,
+                       off_t off_in, fd_t *fd_out, off_t off_out, size_t len,
+                       uint32_t flags, dict_t *xdata)
+{
+    int ret = -1;
+    clnt_conf_t *conf = NULL;
+    rpc_clnt_procedure_t *proc = NULL;
+    clnt_args_t args = {
+        0,
+    };
+
+    conf = this->private;
+    if (!conf || !conf->fops)
+        goto out;
+
+    args.fd = fd_in;
+    args.fd_out = fd_out;
+    args.offset = off_in;
+    args.off_out = off_out;
+    args.size = len;
+    args.flags = flags;
+    args.xdata = xdata;
+
+    proc = &conf->fops->proctable[GF_FOP_COPY_FILE_RANGE];
+    if (proc->fn)
+        ret = proc->fn(frame, this, &args);
+out:
+    if (ret)
+        STACK_UNWIND_STRICT(copy_file_range, frame, -1, ENOTCONN, NULL, NULL,
+                            NULL, NULL);
 
     return 0;
 }
@@ -2898,6 +2933,7 @@ struct xlator_fops fops = {
     .icreate = client_icreate,
     .namelink = client_namelink,
     .put = client_put,
+    .copy_file_range = client_copy_file_range,
 };
 
 struct xlator_dumpops dumpops = {
@@ -2939,7 +2975,7 @@ struct volume_options options[] = {
      .type = GF_OPTION_TYPE_TIME,
      .min = 0,
      .max = 1013,
-     .default_value = "42",
+     .default_value = TOSTRING(GF_NETWORK_TIMEOUT),
      .description = "Time duration for which the client waits to "
                     "check if the server is responsive.",
      .op_version = {1},
@@ -2980,4 +3016,19 @@ struct volume_options options[] = {
      .op_version = {GD_OP_VERSION_3_7_0},
      .flags = OPT_FLAG_SETTABLE | OPT_FLAG_DOC},
     {.key = {NULL}},
+};
+
+xlator_api_t xlator_api = {
+    .init = init,
+    .fini = fini,
+    .notify = notify,
+    .reconfigure = reconfigure,
+    .mem_acct_init = mem_acct_init,
+    .op_version = {1}, /* Present from the initial version */
+    .dumpops = &dumpops,
+    .fops = &fops,
+    .cbks = &cbks,
+    .options = options,
+    .identifier = "client",
+    .category = GF_MAINTAINED,
 };

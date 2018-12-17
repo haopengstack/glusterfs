@@ -8,12 +8,12 @@
    cases as published by the Free Software Foundation.
 */
 
-#include "xlator.h"
+#include <glusterfs/xlator.h>
 
 #include "selinux.h"
 #include "selinux-messages.h"
 #include "selinux-mem-types.h"
-#include "compat-errno.h"
+#include <glusterfs/compat-errno.h>
 
 static int
 selinux_fgetxattr_cbk(call_frame_t *frame, void *cookie, xlator_t *this,
@@ -310,3 +310,16 @@ struct volume_options options[] = {
     {
         .key = {NULL},
     }};
+
+xlator_api_t xlator_api = {
+    .init = init,
+    .fini = fini,
+    .reconfigure = reconfigure,
+    .mem_acct_init = mem_acct_init,
+    .op_version = {1}, /* Present from the initial version */
+    .fops = &fops,
+    .cbks = &cbks,
+    .options = options,
+    .identifier = "selinux",
+    .category = GF_MAINTAINED,
+};
